@@ -1,6 +1,7 @@
 from Higgs_Mass_setup import DrawResolution
 import ROOT
 import array
+import numpy as np
 
 #TString USER_DIR = "/afs/cern.ch/work/f/ferrico/private/Rochester/CMSSW_12_4_3/src/";
 #TString USER_DIR = "/afs/cern.ch/work/x/xzuo/UF_NanoAODTool_10619p2/src/Roch_test/";
@@ -951,6 +952,652 @@ def rochester():
 
         
 #zeile 1090 im C++ File
+
+    for s in range(2):
+        if Anno_2018:
+            _file0 = ROOT.TFile(USER_DIR + samples[s] + ".root")
+
+        if _file0:
+            tree = ROOT.TTree(_file0.Get("Ana/passedEvents"))
+        else:
+            print("Datei nicht gefunden")
+            exit()
+
+        if not tree:
+            print("Baum nicht gefunden")
+            exit()
+
+        h_num_eventi = ROOT.TH1F(_file0.Get("Ana/sumWeights"))
+        num_event = h_num_eventi.Integral()
+
+        tree.SetBranchAddress("muon_pt", muon_pt)
+        tree.SetBranchAddress("muon_eta", muon_eta)
+        tree.SetBranchAddress("muon_phi", muon_phi)
+        tree.SetBranchAddress("muon_mass", muon_mass)
+        tree.SetBranchAddress("muon_charge", muon_charge)
+        tree.SetBranchAddress("muon_isLoose", muon_isLoose)
+        tree.SetBranchAddress("muon_isMedium", muon_isMedium)
+        tree.SetBranchAddress("muon_isTight", muon_isTight)
+        tree.SetBranchAddress("muon_trackIso", muon_trackIso)
+
+        tree.SetBranchAddress("GEN_pt", GEN_pt)
+        tree.SetBranchAddress("GEN_eta", GEN_eta)
+        tree.SetBranchAddress("GEN_phi", GEN_phi)
+        tree.SetBranchAddress("GEN_mass", GEN_mass)
+        tree.SetBranchAddress("GEN_id", GEN_id)
+        tree.SetBranchAddress("GEN_status", GEN_status)
+        tree.SetBranchAddress("GEN_motherId", GEN_motherId)
+
+        tree.SetBranchAddress("hlt_pt", hlt_pt)
+        tree.SetBranchAddress("hlt_eta", hlt_eta)
+        tree.SetBranchAddress("hlt_phi", hlt_phi)
+
+        tree.SetBranchAddress("passedTrig", passedTrig)
+
+        nentries = tree.GetEntries()
+
+        print(nentries)
+
+        for entry in range(nentries):
+            tree.GetEntry(entry)
+            if entry == 0:
+                print(weight)
+
+            if entry % 250000 == 0:
+                print(f"{entry} / {nentries}")
+
+            if len(muon_pt) < 2:
+                continue
+
+            for j in range(muon_pt.size()):
+                if len(muon_hlt_match) > 1:
+                    pass
+
+                deltaR = 1000
+                if muon_pt.at(j) < 10:
+                    continue
+                if abs(muon_eta.at(j)) > 2.4:
+                    continue
+                if muon_trackIso.at(j) / muon_pt.at(j) > 0.1:
+                    continue
+                if not muon_isMedium:
+                    continue
+
+                for i in range(hlt_pt.size()):
+                    if hlt_pt.at(i) < 10:
+                        continue
+
+                    deltaEta = hlt_eta.at(i) - muon_eta.at(j)
+                    deltaPhi = hlt_phi.at(i) - muon_phi.at(j)
+                    tmp_deltaR = np.sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi)
+                    if tmp_deltaR < deltaR:
+                        deltaR = tmp_deltaR
+                if deltaR < 0.35:
+                    muon_hlt_match.append(j)
+
+                if s == 0:
+                    deltaR = 1000
+                    k = -1
+                    for i in range(GEN_pt.size()):
+                        if GEN_status.at(i) != 1:
+                            continue
+                        if abs(GEN_id.at(i)) != 13:
+                            continue
+                        if GEN_motherId.at(i) != 23:
+                            continue
+
+                        deltaEta = GEN_eta.at(i) - muon_eta.at(j)
+                        deltaPhi = GEN_phi.at(i) - muon_phi.at(j)
+                        tmp_deltaR = np.sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi)
+                        if tmp_deltaR < deltaR:
+                            deltaR = tmp_deltaR
+                            if deltaR < 0.1:
+                                k = i
+                    if k != -1:
+                        muon_GEN_match.append(k)
+
+        if len(muon_hlt_match) < 2:
+            continue
+        if muon_charge.at(muon_hlt_match[0]) + muon_charge.at(muon_hlt_match[1]) != 0:
+            continue
+        if muon_pt.at(muon_hlt_match[0]) < 25:
+            continue
+
+        lep0 = ROOT.TLorentzVector()
+        lep1 = ROOT.TLorentzVector()
+        Z = ROOT.TLorentzVector()
+
+        if muon_charge.at(muon_hlt_match[0]) > 0:
+            if s == 0:
+                Additive0 = h_Additive_MC.GetBinContent(h_Additive_MC.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0])))
+                Additive1 = h_Additive_MC.GetBinContent(h_Additive_MC.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1])))
+                Multiplicative0 = 1 + h_Multiplicative_MC.GetBinContent(h_Multiplicative_MC.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0]))) / h_denominator_MC_pos.GetBinContent(h_denominator_MC_pos.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0])))
+                Multiplicative1 = 1 + h_Multiplicative_MC.GetBinContent(h_Multiplicative_MC.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1]))) / h_denominator_MC_neg.GetBinContent(h_denominator_MC_neg.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1])))
+                new_pt0 = 1.0 / (Multiplicative0 / muon_pt.at(muon_hlt_match[0]) + Additive0)
+                new_pt1 = 1.0 / (Multiplicative1 / muon_pt.at(muon_hlt_match[1]) - Additive1)
+            else:
+                Additive0 = h_Additive_DATA.GetBinContent(h_Additive_DATA.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0])))
+                Additive1 = h_Additive_DATA.GetBinContent(h_Additive_DATA.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1])))
+                Multiplicative0 = 1 + h_Multiplicative_DATA.GetBinContent(h_Multiplicative_DATA.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0]))) / h_denominator_DATA_pos.GetBinContent(h_denominator_DATA_pos.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0])))
+                Multiplicative1 = 1 + h_Multiplicative_DATA.GetBinContent(h_Multiplicative_DATA.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1]))) / h_denominator_DATA_neg.GetBinContent(h_denominator_DATA_neg.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1])))
+                new_pt0 = 1.0 / (Multiplicative0 / muon_pt.at(muon_hlt_match[0]) + Additive0)
+                new_pt1 = 1.0 / (Multiplicative1 / muon_pt.at(muon_hlt_match[1]) - Additive1)
+        else:
+            if s == 0:
+                Additive0 = h_Additive_MC.GetBinContent(h_Additive_MC.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0])))
+                Additive1 = h_Additive_MC.GetBinContent(h_Additive_MC.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1])))
+                Multiplicative0 = 1 + h_Multiplicative_MC.GetBinContent(h_Multiplicative_MC.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0]))) / h_denominator_MC_neg.GetBinContent(h_denominator_MC_neg.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0])))
+                Multiplicative1 = 1 + h_Multiplicative_MC.GetBinContent(h_Multiplicative_MC.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1]))) / h_denominator_MC_pos.GetBinContent(h_denominator_MC_pos.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1])))
+                new_pt0 = 1.0 / (Multiplicative0 / muon_pt.at(muon_hlt_match[0]) - Additive0)
+                new_pt1 = 1.0 / (Multiplicative1 / muon_pt.at(muon_hlt_match[1]) + Additive1)
+            else:
+                Additive0 = h_Additive_DATA.GetBinContent(h_Additive_DATA.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0])))
+                Additive1 = h_Additive_DATA.GetBinContent(h_Additive_DATA.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1])))
+                Multiplicative0 = 1 + h_Multiplicative_DATA.GetBinContent(h_Multiplicative_DATA.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0]))) / h_denominator_DATA_neg.GetBinContent(h_denominator_DATA_neg.FindBin(muon_eta.at(muon_hlt_match[0]), muon_phi.at(muon_hlt_match[0])))
+                Multiplicative1 = 1 + h_Multiplicative_DATA.GetBinContent(h_Multiplicative_DATA.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1]))) / h_denominator_DATA_pos.GetBinContent(h_denominator_DATA_pos.FindBin(muon_eta.at(muon_hlt_match[1]), muon_phi.at(muon_hlt_match[1])))
+                new_pt0 = 1.0 / (Multiplicative0 / muon_pt.at(muon_hlt_match[0]) - Additive0)
+                new_pt1 = 1.0 / (Multiplicative1 / muon_pt.at(muon_hlt_match[1]) + Additive1)
+
+        lep0.SetPtEtaPhiM(muon_pt[0], muon_eta[0], muon_phi[0], muon_mass[0])
+        lep1.SetPtEtaPhiM(muon_pt[1], muon_eta[1], muon_phi[1], muon_mass[1])
+        unCorrectedMass = (lep0 + lep1).M()
+
+        lep0.SetPtEtaPhiM(new_pt0, muon_eta[0], muon_phi[0], muon_mass[0])
+        lep1.SetPtEtaPhiM(new_pt1, muon_eta[1], muon_phi[1], muon_mass[1])
+        Z = lep0 + lep1
+
+        if Z.M() > 81 and Z.M() < 101:
+            if s == 0:
+                ZbosonPt = h_ZBoson_pt_correction.GetBinContent(h_ZBoson_pt_correction.FindBin(Z.Pt()))
+                weight = lumi * crossSection / num_event
+                reweight = ZbosonPt * weight
+            else:
+                weight = 1
+                reweight = 1
+
+            h_Zboson_mass[s].Fill(Z.M(), reweight)
+            h_Zboson_pT[s].Fill(Z.Pt(), reweight)
+
+            h_lepton_qOverPt[s].Fill(muon_charge[0] / new_pt0, reweight)
+            h_lepton_qOverPt[s].Fill(muon_charge[1] / new_pt1, reweight)
+
+            h_lepton_pt[s].Fill(new_pt0, reweight)
+            h_lepton_pt[s].Fill(new_pt1, reweight)
+
+            h_lepton_eta[s].Fill(muon_eta[0], reweight)
+            h_lepton_eta[s].Fill(muon_eta[1], reweight)
+
+            h_lepton_phi[s].Fill(muon_phi[0], reweight)
+            h_lepton_phi[s].Fill(muon_phi[1], reweight)
+
+            if s == 0:
+                h_MC_mass.Fill(unCorrectedMass, Z.M(), reweight)
+            else:
+                h_DATA_mass.Fill(unCorrectedMass, Z.M(), reweight)
+
+            if muon_charge[0] > 0:
+                h_lepton_qOverPt_scan_EtaPhi[s][0].Fill(muon_eta[0], muon_phi[0], 1 / new_pt0, reweight)
+                h_lepton_qOverPt_scan_EtaPhi[s][1].Fill(muon_eta[1], muon_phi[1], 1 / new_pt1, reweight)
+
+                h_Zboson_mass_vs_eta[s][0].Fill(muon_eta[0], Z.M(), reweight)
+                h_Zboson_mass_vs_eta[s][1].Fill(muon_eta[1], Z.M(), reweight)
+                h_Zboson_mass_vs_phi[s][0].Fill(muon_phi[0], Z.M(), reweight)
+                h_Zboson_mass_vs_phi[s][1].Fill(muon_phi[1], Z.M(), reweight)
+                if s == 0:
+                    h_pTVariance_MC_pos.Fill((new_pt0 - muon_pt[0]) / muon_pt[0], reweight)
+                    h_pTVariance_MC_neg.Fill((new_pt1 - muon_pt[1]) / muon_pt[1], reweight)
+                if s == 1:
+                    h_pTVariance_DATA_pos.Fill((new_pt0 - muon_pt[0]) / muon_pt[0], reweight)
+                    h_pTVariance_DATA_neg.Fill((new_pt1 - muon_pt[1]) / muon_pt[1], reweight)
+            else:
+                h_lepton_qOverPt_scan_EtaPhi[s][0].Fill(muon_eta[1], muon_phi[1], 1 / new_pt1, reweight)
+                h_lepton_qOverPt_scan_EtaPhi[s][1].Fill(muon_eta[0], muon_phi[0], 1 / new_pt0, reweight)
+
+                h_Zboson_mass_vs_eta[s][0].Fill(muon_eta[1], Z.M(), reweight)
+                h_Zboson_mass_vs_eta[s][1].Fill(muon_eta[0], Z.M(), reweight)
+                h_Zboson_mass_vs_phi[s][0].Fill(muon_phi[1], Z.M(), reweight)
+                h_Zboson_mass_vs_phi[s][1].Fill(muon_phi[0], Z.M(), reweight)
+                if s == 0:
+                    h_pTVariance_MC_neg.Fill((new_pt0 - muon_pt[0]) / muon_pt[0], reweight)
+                    h_pTVariance_MC_pos.Fill((new_pt1 - muon_pt[1]) / muon_pt[1], reweight)
+                if s == 1:
+                    h_pTVariance_DATA_neg.Fill((new_pt0 - muon_pt[0]) / muon_pt[0], reweight)
+                    h_pTVariance_DATA_pos.Fill((new_pt1 - muon_pt[1]) / muon_pt[1], reweight)
+        if s == 0:
+            if len(muon_GEN_match) < 2:
+                continue
+            if GEN_id[muon_GEN_match[0]] + GEN_id[muon_GEN_match[1]] != 0:
+                continue
+
+            GEN_pt0 = 0.0
+            rand.SetSeed(abs(int(np.sin(muon_phi[muon_hlt_match[0]]) * 100000)))
+            GEN_pt0 = GEN_pt[muon_GEN_match[0]] * (1 + rand.Gaus(0, h_resGEN.GetBinContent(h_resGEN.FindBin(GEN_pt[muon_GEN_match[0]]))))
+
+            GEN_pt1 = 0.0
+            rand.SetSeed(abs(int(np.sin(muon_phi[muon_hlt_match[1]]) * 100000)))
+            GEN_pt1 = GEN_pt[muon_GEN_match[1]] * (1 + rand.Gaus(0, h_resGEN.GetBinContent(h_resGEN.FindBin(GEN_pt[muon_GEN_match[1]]))))
+
+            lep0 = ROOT.TLorentzVector()
+            lep1 = ROOT.TLorentzVector()
+            lep0.SetPtEtaPhiM(GEN_pt0, GEN_eta[muon_GEN_match[0]], GEN_phi[muon_GEN_match[0]], GEN_mass[muon_GEN_match[0]])
+            lep1.SetPtEtaPhiM(GEN_pt1, GEN_eta[muon_GEN_match[1]], GEN_phi[muon_GEN_match[1]], GEN_mass[muon_GEN_match[1]])
+            Z = lep0 + lep1
+
+            h_Zboson_mass[2].Fill(Z.M(), reweight)
+            h_Zboson_pT[2].Fill(Z.Pt(), reweight)
+
+            h_lepton_qOverPt[2].Fill(GEN_id[muon_GEN_match[0]] / (13.0 * GEN_pt0), reweight)
+            h_lepton_qOverPt[2].Fill(GEN_id[muon_GEN_match[1]] / (13.0 * GEN_pt1), reweight)
+
+            h_lepton_pt[2].Fill(GEN_pt0, reweight)
+            h_lepton_pt[2].Fill(GEN_pt1, reweight)
+
+            h_lepton_eta[2].Fill(GEN_eta[muon_GEN_match[0]], reweight)
+            h_lepton_eta[2].Fill(GEN_eta[muon_GEN_match[1]], reweight)
+
+            h_lepton_phi[2].Fill(GEN_phi[muon_GEN_match[0]], reweight)
+            h_lepton_phi[2].Fill(GEN_phi[muon_GEN_match[1]], reweight)
+
+            if GEN_id[muon_GEN_match[0]] < 0:
+                h_lepton_qOverPt_scan_EtaPhi[2][0].Fill(GEN_eta[muon_GEN_match[0]], GEN_phi[muon_GEN_match[0]], 1 / GEN_pt0, reweight)
+                h_lepton_qOverPt_scan_EtaPhi[2][1].Fill(GEN_eta[muon_GEN_match[1]], GEN_phi[muon_GEN_match[1]], 1 / GEN_pt1, reweight)
+
+                h_Zboson_mass_vs_eta[2][0].Fill(muon_eta[muon_hlt_match[0]], Z.M(), reweight)
+                h_Zboson_mass_vs_eta[2][1].Fill(muon_eta[muon_hlt_match[1]], Z.M(), reweight)
+                h_Zboson_mass_vs_phi[2][0].Fill(muon_phi[muon_hlt_match[0]], Z.M(), reweight)
+                h_Zboson_mass_vs_phi[2][1].Fill(muon_phi[muon_hlt_match[1]], Z.M(), reweight)
+            else:
+                h_lepton_qOverPt_scan_EtaPhi[2][0].Fill(GEN_eta[muon_GEN_match[1]], GEN_phi[muon_GEN_match[1]], 1 / GEN_pt1, reweight)
+                h_lepton_qOverPt_scan_EtaPhi[2][1].Fill(GEN_eta[muon_GEN_match[0]], GEN_phi[muon_GEN_match[0]], 1 / GEN_pt0, reweight)
+
+                h_Zboson_mass_vs_eta[2][0].Fill(muon_eta[muon_hlt_match[1]], Z.M(), reweight)
+                h_Zboson_mass_vs_eta[2][1].Fill(muon_eta[muon_hlt_match[0]], Z.M(), reweight)
+                h_Zboson_mass_vs_phi[2][0].Fill(muon_phi[muon_hlt_match[1]], Z.M(), reweight)
+                h_Zboson_mass_vs_phi[2][1].Fill(muon_phi[muon_hlt_match[0]], Z.M(), reweight)
+    
+    DrawResolution(h_Zboson_mass[0], h_Zboson_mass[1], h_Zboson_mass[2], samples, "Zboson_mass", save + "[", "mass_{2l} (GeV)")
+    DrawResolution(h_Zboson_mass[0], h_Zboson_mass[1], h_Zboson_mass[2], samples, "Zboson_mass", save, "mass_{2l} (GeV)")
+    DrawResolution(h_Zboson_pT[0], h_Zboson_pT[1], h_Zboson_pT[2], samples, "Zboson_pT", save, "pT_{2l} (GeV)")
+    DrawResolution(h_lepton_pt[0], h_lepton_pt[1], h_lepton_pt[2], samples, "h_lepton_pt", save, "p_{T} (GeV)")
+    DrawResolution(h_lepton_eta[0], h_lepton_eta[1], h_lepton_eta[2], samples, "h_lepton_eta", save, "#eta")
+    DrawResolution(h_lepton_phi[0], h_lepton_phi[1], h_lepton_phi[2], samples, "h_lepton_phi", save, "#phi")
+    DrawResolution(h_lepton_qOverPt[0], h_lepton_qOverPt[1], h_lepton_qOverPt[2], samples, "h_lepton_qOverPt", save, "q/p_{T} (GeV)")
+    # DrawResolution(h_lepton_qOverPt[0], h_lepton_qOverPt[1], h_lepton_qOverPt[2], samples, "h_lepton_qOverPt", save + "]", "q/p_{T} (GeV)")
+
+    c_MC_mass = ROOT.TCanvas("c_MC_mass", "c_MC_mass", 600, 600)
+    h_MC_mass.Draw("COLZ")
+    c_MC_mass.Print(save)
+    c_DATA_mass = ROOT.TCanvas("c_DATA_mass", "c_DATA_mass", 600, 600)
+    h_DATA_mass.Draw("COLZ")
+    c_DATA_mass.Print(save)
+    # c_DATA_mass.Print(save + "]")
+
+    Mass_vs_phi_pos = ROOT.TMultiGraph()
+    Mass_vs_phi_neg = ROOT.TMultiGraph()
+    Mass_vs_eta_pos = ROOT.TMultiGraph()
+    Mass_vs_eta_neg = ROOT.TMultiGraph()
+
+    for s in range(3):
+        mean_pos = []
+        mean_neg = []
+        eta_bins_centered = []
+        phi_bins_centered = []
+
+        for xxx in range(1, h_Zboson_mass_vs_eta[s][0].GetNbinsX() + 1):
+            name = f"Mass_eta_{eta_bins[xxx - 1]:.1f}_{eta_bins[xxx]:.1f}_pos"
+            h_tmp_MC = ROOT.TH1F(h_Zboson_mass_vs_eta[s][0].ProjectionY(name, xxx, xxx))
+            massZ_P = ROOT.RooRealVar("massZ", "massZ", 81, 101)
+            histo = ROOT.RooDataHist("mass Z", "mass Z", massZ_P, h_tmp_MC)
+            PDGmZ = ROOT.RooRealVar("PDGmZ", "PDGmZ", 91.19, 86, 96)
+            PDGwZ = ROOT.RooRealVar("PDGwZ", "PDGwZ", 2.5, 1, 4)
+            PDGBW = ROOT.RooBreitWigner("PDGBW", "PDGBW", massZ_P, PDGmZ, PDGwZ)
+            PDGBW_2 = ROOT.RooBreitWigner("PDGBW_2", "PDGBW_2", massZ_P, PDGmZ, PDGwZ)
+            CB_mean = ROOT.RooRealVar("CB_mean", "CB_mean", 0, -5, 5)
+            Sigma = ROOT.RooRealVar("Sigma", "Sigma", 1, 0.1, 20)
+            AlphaL = ROOT.RooRealVar("AlphaL", "AlphaL", 1, 0.1, 30)
+            ExpL = ROOT.RooRealVar("ExpL", "ExpL", 1, 0.1, 30)
+            AlphaR = ROOT.RooRealVar("AlphaR", "AlphaR", 1, 0.1, 30)
+            ExpR = ROOT.RooRealVar("ExpR", "ExpR", 1, 0.1, 50)
+            DSCB = ROOT.RooDoubleCB("DSCB", "DSCB", massZ_P, CB_mean, Sigma, AlphaL, ExpL, AlphaR, ExpR)
+            model = ROOT.RooFFTConvPdf("CW", "CW", massZ_P, PDGBW, DSCB)
+            model_2 = ROOT.RooFFTConvPdf("CW_2", "CW_2", massZ_P, PDGBW, DSCB)
+
+            if s != 20:
+                model.fitTo(histo, ROOT.RooFit.Range(86, 96), ROOT.RooFit.Save(True), ROOT.RooFit.SumW2Error(True), ROOT.RooFit.Verbose(False), ROOT.RooFit.PrintLevel(-1), ROOT.RooFit.Warnings(False), ROOT.RooFit.NumCPU(12), ROOT.RooFit.Timer(True))
+            else:
+                PDGBW.fitTo(histo, ROOT.RooFit.Range(86, 96), ROOT.RooFit.Save(True), ROOT.RooFit.SumW2Error(True), ROOT.RooFit.Verbose(False), ROOT.RooFit.PrintLevel(-1), ROOT.RooFit.Warnings(False), ROOT.RooFit.NumCPU(12), ROOT.RooFit.Timer(True))
+
+            mean_pos.append(PDGmZ.getVal())
+            eta_bins_centered.append(eta_bins[xxx - 1] + abs((eta_bins[1] - eta_bins[0]) / 2))
+
+            c_MC = ROOT.TCanvas(name, name, 900, 700)
+            c_MC.SetFrameFillColor(0)
+            xframe = massZ_P.frame("massZ")
+            xframe = massZ_P.frame(ROOT.RooFit.Title(name))
+            histo.plotOn(xframe)
+            if s != 20:
+                model.plotOn(xframe, ROOT.RooFit.LineColor(ROOT.kBlue))
+                model.paramOn(xframe, ROOT.RooFit.Layout(0.13, 0.5, 0.80))
+            else:
+                PDGBW.plotOn(xframe, ROOT.RooFit.LineColor(ROOT.kRed))
+                PDGBW.paramOn(xframe, ROOT.RooFit.Layout(0.13, 0.5, 0.80))
+            xframe.Draw()
+
+            name = f"Mass_eta_{eta_bins[xxx - 1]:.1f}_{eta_bins[xxx]:.1f}_neg"
+            h_tmp_MC_2 = ROOT.TH1F(h_Zboson_mass_vs_eta[s][1].ProjectionY(name, xxx, xxx))
+            histo_neg = ROOT.RooDataHist("mass Z", "mass Z", massZ_P, h_tmp_MC_2)
+            if s != 20:
+                model_2.fitTo(histo_neg, ROOT.RooFit.Range(86, 96), ROOT.RooFit.Save(True), ROOT.RooFit.SumW2Error(True), ROOT.RooFit.Verbose(False), ROOT.RooFit.PrintLevel(-1), ROOT.RooFit.Warnings(False), ROOT.RooFit.NumCPU(12), ROOT.RooFit.Timer(True))
+            else:
+                PDGBW_2.fitTo(histo_neg, ROOT.RooFit.Range(86, 96), ROOT.RooFit.Save(True), ROOT.RooFit.SumW2Error(True), ROOT.RooFit.Verbose(False), ROOT.RooFit.PrintLevel(-1), ROOT.RooFit.Warnings(False), ROOT.RooFit.NumCPU(12), ROOT.RooFit.Timer(True))
+            mean_neg.append(PDGmZ.getVal())
+
+            c_MC = ROOT.TCanvas(name, name, 900, 700)
+            c_MC.SetFrameFillColor(0)
+            xframe = massZ_P.frame("massZ")
+            xframe = massZ_P.frame(ROOT.RooFit.Title(name))
+            histo_neg.plotOn(xframe)
+            if s != 20:
+                model_2.plotOn(xframe, ROOT.RooFit.LineColor(ROOT.kBlue))
+                model_2.paramOn(xframe, ROOT.RooFit.Layout(0.13, 0.5, 0.80))
+            else:
+                PDGBW_2.plotOn(xframe, ROOT.RooFit.LineColor(ROOT.kRed))
+                PDGBW_2.paramOn(xframe, ROOT.RooFit.Layout(0.13, 0.5, 0.80))
+            xframe.Draw()
+
+        gr_new = ROOT.TGraph(len(eta_bins) - 1, array('d', eta_bins_centered), array('d', mean_pos))
+        if s == 1:
+            gr_new.SetMarkerColor(ROOT.kRed)
+        if s == 2:
+            gr_new.SetMarkerColor(ROOT.kGreen)
+        Mass_vs_eta_pos.Add(gr_new)
+
+        gr_new = ROOT.TGraph(len(eta_bins) - 1, array('d', eta_bins_centered), array('d', mean_neg))
+        if s == 1:
+            gr_new.SetMarkerColor(ROOT.kRed)
+        if s == 2:
+            gr_new.SetMarkerColor(ROOT.kGreen)
+        Mass_vs_eta_pos.Add(gr_new)
+
+        gr_new = ROOT.TGraph(len(eta_bins) - 1, array('d', eta_bins_centered), array('d', mean_neg))
+        if s == 1:
+            gr_new.SetMarkerColor(ROOT.kRed)
+        if s == 2:
+            gr_new.SetMarkerColor(ROOT.kGreen)
+        Mass_vs_eta_neg.Add(gr_new)
+
+        mean_pos.clear()
+        mean_neg.clear()
+
+        for xxx in range(1, h_Zboson_mass_vs_phi[s][0].GetNbinsX() + 1):
+            name = f"Mass_phi_{phi_bins[xxx - 1]:.1f}_{phi_bins[xxx]:.1f}_pos"
+            h_tmp_MC = ROOT.TH1F(h_Zboson_mass_vs_phi[s][0].ProjectionY(name, xxx, xxx))
+            massZ_P = ROOT.RooRealVar("massZ", "massZ", 81, 101)
+            histo = ROOT.RooDataHist("mass Z", "mass Z", massZ_P, h_tmp_MC)
+            PDGmZ = ROOT.RooRealVar("PDGmZ", "PDGmZ", 91.19, 86, 96)
+            PDGwZ = ROOT.RooRealVar("PDGwZ", "PDGwZ", 2.5, 1, 4)
+            PDGBW = ROOT.RooBreitWigner("PDGBW", "PDGBW", massZ_P, PDGmZ, PDGwZ)
+            PDGBW_2 = ROOT.RooBreitWigner("PDGBW_2", "PDGBW_2", massZ_P, PDGmZ, PDGwZ)
+            CB_mean = ROOT.RooRealVar("CB_mean", "CB_mean", 0, -5, 5)
+            Sigma = ROOT.RooRealVar("Sigma", "Sigma", 1, 0.1, 20)
+            AlphaL = ROOT.RooRealVar("AlphaL", "AlphaL", 1, 0.1, 30)
+            ExpL = ROOT.RooRealVar("ExpL", "ExpL", 1, 0.1, 30)
+            AlphaR = ROOT.RooRealVar("AlphaR", "AlphaR", 1, 0.1, 30)
+            ExpR = ROOT.RooRealVar("ExpR", "ExpR", 1, 0.1, 50)
+            DSCB = ROOT.RooDoubleCB("DSCB", "DSCB", massZ_P, CB_mean, Sigma, AlphaL, ExpL, AlphaR, ExpR)
+            model = ROOT.RooFFTConvPdf("CW", "CW", massZ_P, PDGBW, DSCB)
+            model_2 = ROOT.RooFFTConvPdf("CW_2", "CW_2", massZ_P, PDGBW, DSCB)
+
+            if s != 20:
+                model.fitTo(histo, ROOT.RooFit.Range(86, 96), ROOT.RooFit.Save(True), ROOT.RooFit.SumW2Error(True), ROOT.RooFit.Verbose(False), ROOT.RooFit.PrintLevel(-1), ROOT.RooFit.Warnings(False), ROOT.RooFit.NumCPU(12), ROOT.RooFit.Timer(True))
+            else:
+                PDGBW.fitTo(histo, ROOT.RooFit.Range(86, 96), ROOT.RooFit.Save(True), ROOT.RooFit.SumW2Error(True), ROOT.RooFit.Verbose(False), ROOT.RooFit.PrintLevel(-1), ROOT.RooFit.Warnings(False), ROOT.RooFit.NumCPU(12), ROOT.RooFit.Timer(True))
+
+            mean_pos.append(PDGmZ.getVal())
+            phi_bins_centered.append(phi_bins[xxx - 1] + abs((phi_bins[1] - phi_bins[0]) / 2))
+
+            c_MC = ROOT.TCanvas(name, name, 900, 700)
+            c_MC.SetFrameFillColor(0)
+            xframe = massZ_P.frame("massZ")
+            xframe = massZ_P.frame(ROOT.RooFit.Title(name))
+            histo.plotOn(xframe)
+            if s != 20:
+                model.plotOn(xframe, ROOT.RooFit.LineColor(ROOT.kBlue))
+                model.paramOn(xframe, ROOT.RooFit.Layout(0.13, 0.5, 0.80))
+            else:
+                PDGBW.plotOn(xframe, ROOT.RooFit.LineColor(ROOT.kRed))
+                PDGBW.paramOn(xframe, ROOT.RooFit.Layout(0.13, 0.5, 0.80))
+            xframe.Draw()
+
+            name = f"Mass_phi_{phi_bins[xxx - 1]:.1f}_{phi_bins[xxx]:.1f}_neg"
+            h_tmp_MC_2 = ROOT.TH1F(h_Zboson_mass_vs_phi[s][1].ProjectionY(name, xxx, xxx))
+            histo_neg = ROOT.RooDataHist("mass Z", "mass Z", massZ_P, h_tmp_MC_2)
+            if s != 20:
+                model_2.fitTo(histo_neg, ROOT.RooFit.Range(86, 96), ROOT.RooFit.Save(True), ROOT.RooFit.SumW2Error(True), ROOT.RooFit.Verbose(False), ROOT.RooFit.PrintLevel(-1), ROOT.RooFit.Warnings(False), ROOT.RooFit.NumCPU(12), ROOT.RooFit.Timer(True))
+            else:
+                PDGBW_2.fitTo(histo_neg, ROOT.RooFit.Range(86, 96), ROOT.RooFit.Save(True), ROOT.RooFit.SumW2Error(True), ROOT.RooFit.Verbose(False), ROOT.RooFit.PrintLevel(-1), ROOT.RooFit.Warnings(False), ROOT.RooFit.NumCPU(12), ROOT.RooFit.Timer(True))
+            mean_neg.append(PDGmZ.getVal())
+
+            c_MC = ROOT.TCanvas(name, name, 900, 700)
+            c_MC.SetFrameFillColor(0)
+            xframe = massZ_P.frame("massZ")
+            xframe = massZ_P.frame(ROOT.RooFit.Title(name))
+            histo_neg.plotOn(xframe)
+            if s != 20:
+                model_2.plotOn(xframe, ROOT.RooFit.LineColor(ROOT.kBlue))
+                model_2.paramOn(xframe, ROOT.RooFit.Layout(0.13, 0.5, 0.80))
+            else:
+                PDGBW_2.plotOn(xframe, ROOT.RooFit.LineColor(ROOT.kRed))
+                PDGBW_2.paramOn(xframe, ROOT.RooFit.Layout(0.13, 0.5, 0.80))
+            xframe.Draw()
+
+        gr_new = ROOT.TGraph(len(phi_bins) - 1, array('d', phi_bins_centered), array('d', mean_pos))
+
+    #for xxx in range(1, h_Zboson_mass_vs_eta[0][0].GetNbinsX()+1):
+        #name = ROOT.TString(f"Mass_eta_{eta_bins[xxx-1]:.1f}_{eta_bins[xxx]:.1f}_pos_MC")
+        #h_tmp_MC = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_MC = h_Zboson_mass_vs_eta[0][0].ProjectionY(name, xxx, xxx)
+
+        #name = ROOT.TString(f"Mass_eta_{eta_bins[xxx-1]:.1f}_{eta_bins[xxx]:.1f}_pos_DATA")
+        #h_tmp_DATA = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_DATA = h_Zboson_mass_vs_eta[1][0].ProjectionY(name, xxx, xxx)
+
+        #name = ROOT.TString(f"Mass_eta_{eta_bins[xxx-1]:.1f}_{eta_bins[xxx]:.1f}_pos")
+        #h_tmp_GEN = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_GEN = h_Zboson_mass_vs_eta[2][0].ProjectionY(name, xxx, xxx)
+
+        #DrawResolution(h_tmp_MC, h_tmp_DATA, h_tmp_GEN, samples, name, save, "mass_{2l} (GeV)")
+
+        #name = ROOT.TString(f"Mass_eta_{eta_bins[xxx-1]:.1f}_{eta_bins[xxx]:.1f}_neg_MC")
+        #h_tmp_MC_2 = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_MC_2 = h_Zboson_mass_vs_eta[0][1].ProjectionY(name, xxx, xxx)
+
+        #name = ROOT.TString(f"Mass_eta_{eta_bins[xxx-1]:.1f}_{eta_bins[xxx]:.1f}_neg_DATA")
+        #h_tmp_DATA_2 = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_DATA_2 = h_Zboson_mass_vs_eta[1][1].ProjectionY(name, xxx, xxx)
+
+        #name = ROOT.TString(f"Mass_eta_{eta_bins[xxx-1]:.1f}_{eta_bins[xxx]:.1f}_neg")
+        #h_tmp_GEN_2 = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_GEN_2 = h_Zboson_mass_vs_eta[2][1].ProjectionY(name, xxx, xxx)
+
+        #DrawResolution(h_tmp_MC_2, h_tmp_DATA_2, h_tmp_GEN_2, samples, name, save, "mass_{2l} (GeV)")
+
+    #for xxx in range(1, h_Zboson_mass_vs_phi[0][0].GetNbinsX()+1):
+        #name = ROOT.TString(f"Mass_phi_{phi_bins[xxx-1]:.1f}_{phi_bins[xxx]:.1f}_pos_MC")
+        #h_tmp_MC = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_MC = h_Zboson_mass_vs_phi[0][0].ProjectionY(name, xxx, xxx)
+
+        #name = ROOT.TString(f"Mass_phi_{phi_bins[xxx-1]:.1f}_{phi_bins[xxx]:.1f}_pos_DATA")
+        #h_tmp_DATA = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_DATA = h_Zboson_mass_vs_phi[1][0].ProjectionY(name, xxx, xxx)
+
+        #name = ROOT.TString(f"Mass_phi_{phi_bins[xxx-1]:.1f}_{phi_bins[xxx]:.1f}_pos")
+        #h_tmp_GEN = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_GEN = h_Zboson_mass_vs_phi[2][0].ProjectionY(name, xxx, xxx)
+
+        #DrawResolution(h_tmp_MC, h_tmp_DATA, h_tmp_GEN, samples, name, save, "mass_{2l} (GeV)")
+
+        #name = ROOT.TString(f"Mass_phi_{phi_bins[xxx-1]:.1f}_{phi_bins[xxx]:.1f}_neg_MC")
+        #h_tmp_MC_2 = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_MC_2 = h_Zboson_mass_vs_phi[0][1].ProjectionY(name, xxx, xxx)
+
+        #name = ROOT.TString(f"Mass_phi_{phi_bins[xxx-1]:.1f}_{phi_bins[xxx]:.1f}_neg_DATA")
+        #h_tmp_DATA_2 = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_DATA_2 = h_Zboson_mass_vs_phi[1][1].ProjectionY(name, xxx, xxx)
+
+        #name = ROOT.TString(f"Mass_phi_{phi_bins[xxx-1]:.1f}_{phi_bins[xxx]:.1f}_neg")
+        #h_tmp_GEN_2 = ROOT.TH1F(name, name, bin_count, bin_min, bin_max)
+        #h_tmp_GEN_2 = h_Zboson_mass_vs_phi[2][1].ProjectionY(name, xxx, xxx)
+
+        #DrawResolution(h_tmp_MC_2, h_tmp_DATA_2, h_tmp_GEN_2, samples, name, save, "mass_{2l} (GeV)")
+
+    c_Mass_vs_eta_pos = ROOT.TCanvas("c_Mass_vs_eta_pos", "c_Mass_vs_eta_pos", 600, 600)
+    Mass_vs_eta_pos.SetTitle("c_Mass_vs_eta_pos")
+    Mass_vs_eta_pos.Draw("AP*")
+    c_Mass_vs_eta_pos.Print(save)
+    c_Mass_vs_eta_neg = ROOT.TCanvas("c_Mass_vs_eta_neg", "c_Mass_vs_eta_neg", 600, 600)
+    Mass_vs_eta_neg.SetTitle("c_Mass_vs_eta_neg")
+    Mass_vs_eta_neg.Draw("AP*")
+    c_Mass_vs_eta_neg.Print(save)
+    c_Mass_vs_phi_pos = ROOT.TCanvas("c_Mass_vs_phi_pos", "c_Mass_vs_phi_pos", 600, 600)
+    Mass_vs_phi_pos.SetTitle("c_Mass_vs_phi_pos")
+    Mass_vs_phi_pos.Draw("AP*")
+    c_Mass_vs_phi_pos.Print(save)
+    c_Mass_vs_phi_neg = ROOT.TCanvas("c_Mass_vs_phi_neg", "c_Mass_vs_phi_neg", 600, 600)
+    Mass_vs_phi_neg.SetTitle("c_Mass_vs_phi_neg")
+    Mass_vs_phi_neg.Draw("AP*")
+    c_Mass_vs_phi_neg.Print(save)
+
+    h_Additive_MC.Reset()
+    h_Multiplicative_MC.Reset()
+    h_Additive_DATA.Reset()
+    h_Multiplicative_DATA.Reset()
+
+    for xxx in range(1, h_lepton_qOverPt_scan_EtaPhi[0][0].GetNbinsX() + 1):
+        for yyy in range(1, h_lepton_qOverPt_scan_EtaPhi[0][0].GetNbinsY() + 1):
+            name = "1overPt_eta_{:.1f}_{:.1f}_phi_{:.1f}_{:.1f}".format(eta_bins[xxx-1], eta_bins[xxx], phi_bins[yyy-1], phi_bins[yyy])
+            print("========")
+            print(name)
+
+            # Positive part
+            h_tmp_MC = h_lepton_qOverPt_scan_EtaPhi[0][0].ProjectionZ(name + "_MC+", xxx, xxx, yyy, yyy)
+            h_MC = h_tmp_MC.Clone()
+            h_tmp_DATA = h_lepton_qOverPt_scan_EtaPhi[1][0].ProjectionZ(name + "_DATA+", xxx, xxx, yyy, yyy)
+            h_DATA = h_tmp_DATA.Clone()
+            h_tmp_GEN = h_lepton_qOverPt_scan_EtaPhi[2][0].ProjectionZ(name + "_GEN+", xxx, xxx, yyy, yyy)
+            h_GEN = h_tmp_GEN.Clone()
+            
+            h_denominator_MC_pos.SetBinContent(xxx, yyy, h_MC.GetMean())
+            h_denominator_DATA_pos.SetBinContent(xxx, yyy, h_DATA.GetMean())
+            
+            print("After\nDenominator+ =", h_MC.GetMean(), h_DATA.GetMean())
+
+            Corr_MC_pos = h_GEN.GetMean() - h_MC.GetMean()
+            Corr_DATA_pos = h_GEN.GetMean() - h_DATA.GetMean()
+            print("Mean+  =", h_GEN.GetMean(), h_MC.GetMean(), h_DATA.GetMean())
+
+            h_tmp_MC.Reset()
+            h_tmp_DATA.Reset()
+            h_tmp_GEN.Reset()
+            h_MC.Reset()
+            h_DATA.Reset()
+            h_GEN.Reset()
+
+            # Negative part
+            h_tmp_MC = h_lepton_qOverPt_scan_EtaPhi[0][1].ProjectionZ(name + "_MC-", xxx, xxx, yyy, yyy)
+            h_MC = h_tmp_MC.Clone()
+            h_tmp_DATA = h_lepton_qOverPt_scan_EtaPhi[1][1].ProjectionZ(name + "_DATA-", xxx, xxx, yyy, yyy)
+            h_DATA = h_tmp_DATA.Clone()
+            h_tmp_GEN = h_lepton_qOverPt_scan_EtaPhi[2][1].ProjectionZ(name + "_GEN-", xxx, xxx, yyy, yyy)
+            h_GEN = h_tmp_GEN.Clone()
+
+            h_denominator_MC_neg.SetBinContent(xxx, yyy, h_MC.GetMean())
+            h_denominator_DATA_neg.SetBinContent(xxx, yyy, h_DATA.GetMean())
+            print("Denominator- =", h_MC.GetMean(), h_DATA.GetMean())
+
+            Corr_MC_neg = h_GEN.GetMean() - h_MC.GetMean()
+            Corr_DATA_neg = h_GEN.GetMean() - h_DATA.GetMean()
+            print("Mean-  =", h_GEN.GetMean(), h_MC.GetMean(), h_DATA.GetMean())
+
+            print("C_MC =", Corr_MC_pos, Corr_MC_neg)
+            print("C_DATA =", Corr_DATA_pos, Corr_DATA_neg)
+
+            D_m_MC = (Corr_MC_pos + Corr_MC_neg) / 2.0
+            D_a_MC = (Corr_MC_pos - Corr_MC_neg) / 2.0
+            D_m_DATA = (Corr_DATA_pos + Corr_DATA_neg) / 2.0
+            D_a_DATA = (Corr_DATA_pos - Corr_DATA_neg) / 2.0
+            print("D_m_MC =", D_m_MC)
+            print("D_m_DATA =", D_m_DATA)
+            print("D_a_MC =", D_a_MC)
+            print("D_a_DATA =", D_a_DATA)
+
+            M = D_m_MC
+            A = D_a_MC
+            h_Additive_MC.SetBinContent(xxx, yyy, A)
+            h_Multiplicative_MC.SetBinContent(xxx, yyy, M)
+            print("MC: M =", M, "A =", A)
+
+            M = D_m_DATA
+            A = D_a_DATA
+            h_Additive_DATA.SetBinContent(xxx, yyy, A)
+            h_Multiplicative_DATA.SetBinContent(xxx, yyy, M)
+            print("DATA: M =", M, "A =", A)
+
+    c_Additive_MC = ROOT.TCanvas("c_Additive_MC", "c_Additive_MC", 600, 600)
+    c_Additive_MC.SetRightMargin(0.2)
+    h_Additive_MC.Draw("COLZ")
+    c_Additive_MC.Print(save)
+
+    # Additive DATA
+    c_Additive_DATA = ROOT.TCanvas("c_Additive_DATA", "c_Additive_DATA", 600, 600)
+    c_Additive_DATA.SetRightMargin(0.2)
+    h_Additive_DATA.Draw("COLZ")
+    c_Additive_DATA.Print(save)
+
+    # Multiplicative MC
+    c_Multiplicative_MC = ROOT.TCanvas("c_Multiplicative_MC", "c_Multiplicative_MC", 600, 600)
+    c_Multiplicative_MC.SetRightMargin(0.2)
+    h_Multiplicative_MC.Draw("COLZ")
+    c_Multiplicative_MC.Print(save)
+
+    # Multiplicative DATA
+    c_Multiplicative_DATA = ROOT.TCanvas("c_Multiplicative_DATA", "c_Multiplicative_DATA", 600, 600)
+    c_Multiplicative_DATA.SetRightMargin(0.2)
+    h_Multiplicative_DATA.Draw("COLZ")
+    c_Multiplicative_DATA.Print(save)
+
+    # pTVariance MC pos
+    c_pTVariance_MC_pos = ROOT.TCanvas("c_pTVariance_MC_pos", "c_pTVariance_MC_pos", 600, 600)
+    h_pTVariance_MC_pos.SetStats(1111)
+    h_pTVariance_MC_pos.Draw()
+    c_pTVariance_MC_pos.Print(save)
+
+    # pTVariance MC neg
+    c_pTVariance_MC_neg = ROOT.TCanvas("c_pTVariance_MC_neg", "c_pTVariance_MC_neg", 600, 600)
+    h_pTVariance_MC_neg.SetStats(1111)
+    h_pTVariance_MC_neg.Draw()
+    c_pTVariance_MC_neg.Print(save)
+
+    # pTVariance DATA pos
+    c_pTVariance_DATA_pos = ROOT.TCanvas("c_pTVariance_DATA_pos", "c_pTVariance_DATA_pos", 600, 600)
+    h_pTVariance_DATA_pos.SetStats(1111)
+    h_pTVariance_DATA_pos.Draw()
+    c_pTVariance_DATA_pos.Print(save)
+
+    # pTVariance DATA neg
+    c_pTVariance_DATA_neg = ROOT.TCanvas("c_pTVariance_DATA_neg", "c_pTVariance_DATA_neg", 600, 600)
+    h_pTVariance_DATA_neg.SetStats(1111)
+    h_pTVariance_DATA_neg.Draw()
+    c_pTVariance_DATA_neg.Print(save)
+    c_pTVariance_DATA_neg.Print(save + "]")
+
+    return
+
+def dataMCErr(pt, eta, hMuScaleFacUnc):
+    return hMuScaleFacUnc.GetBinContent(hMuScaleFacUnc.FindBin(eta, pt))
+
+
+
 
 
 
