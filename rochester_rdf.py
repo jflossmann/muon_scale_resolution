@@ -187,10 +187,14 @@ def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
     hists = []
     ntuples["GEN"] = ntuples["MC"]
     for s in ntuples:
+        gen = ""
+        if s == "GEN":
+            gen == "gen"
+
         rdf = ROOT.RDataFrame("Events", ntuples[s])
         rdf = rdf.Define("z_pT_weight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
-        rdf = rdf.Define("oneOverpT_1", "1./pt_1")
-        rdf = rdf.Define("oneOverpT_2", "1./pt_2")
+        rdf = rdf.Define("oneOverpT_1", f"1./{gen}pt_1")
+        rdf = rdf.Define("oneOverpT_2", f"1./{gen}pt_2")
         h_neg = rdf.Histo3D(
             (
                 f"h_oneOverpT_{s}_neg", "", 
@@ -198,8 +202,8 @@ def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
                 len(phi_bins)-1, array('f', phi_bins), 
                 len(oneOverpT_bins)-1, array('f', oneOverpT_bins)
             ),
-            "eta_1",
-            "phi_1",
+            f"{gen}eta_1",
+            f"{gen}phi_1",
             "oneOverpT_1",
             "z_pT_weight"
         )
@@ -212,8 +216,8 @@ def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
                 len(phi_bins)-1, array('f', phi_bins), 
                 len(oneOverpT_bins)-1, array('f', oneOverpT_bins)
             ),
-            "eta_1",
-            "phi_1",
+            f"{gen}eta_1",
+            f"{gen}phi_1",
             "oneOverpT_2",
             "z_pT_weight"
         )
@@ -225,7 +229,7 @@ def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
 
 
 
-
+# def apply_scale_corrections(ntuples)
 
 
 if __name__=='__main__':
@@ -247,6 +251,6 @@ if __name__=='__main__':
         'MC': f"{datadir}MC_ntuples.root",
         'DATA': f"{datadir}DATA_ntuples.root",
     }
-    make_ntuples(nanoAODs, ntuples)
+    # make_ntuples(nanoAODs, ntuples)
     hist_zpt(ntuples, pt_bins)
     hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins)
