@@ -76,7 +76,7 @@ ROOT.gInterpreter.Declare("""
 # function in c++ code. Finds indices of muons matched to GEN
 ROOT.gInterpreter.Declare(
 """
-    Int_t muon_genmatch(Float_t eta, Float_t phi, ROOT::VecOps::RVec<Int_t> *GenPart_status, ROOT::VecOps::RVec<Int_t> *GenPart_pdgId, ROOT::VecOps::RVec<Int_t> *GenPart_genPartIdxMother, ROOT::VecOps::RVec<Float_t> *GenPart_eta, ROOT::VecOps::RVec<Float_t> *GenPart_phi){
+    Int_t muon_genmatch(Float_t eta, Float_t phi, Int_t charge, ROOT::VecOps::RVec<Int_t> *GenPart_status, ROOT::VecOps::RVec<Int_t> *GenPart_pdgId, ROOT::VecOps::RVec<Int_t> *GenPart_genPartIdxMother, ROOT::VecOps::RVec<Float_t> *GenPart_eta, ROOT::VecOps::RVec<Float_t> *GenPart_phi){
         Int_t index=-99;
         
         Float_t deltaR=0.1;
@@ -86,6 +86,7 @@ ROOT.gInterpreter.Declare(
             if (GenPart_status->at(j) != 1) continue;
             if (fabs(GenPart_pdgId->at(j)) != 13) continue;
             if (GenPart_pdgId->at(GenPart_genPartIdxMother->at(j)) != 23) continue;
+            if (GenPart_pdgId->at(j) * charge > 0) continue;
 
             dEta = eta - GenPart_eta->at(j);
             dPhi = phi - GenPart_phi->at(j);
@@ -137,8 +138,8 @@ def make_ntuples(nanoAODs, ntuples):
         
         if s=="MC":
             # perform gen delta R matching and collect corresponding events and gen quantities
-            rdf = rdf.Define("genind_1", "muon_genmatch(eta_1, phi_1, &GenPart_status, &GenPart_pdgId, &GenPart_genPartIdxMother, &GenPart_eta, &GenPart_phi)")
-            rdf = rdf.Define("genind_2", "muon_genmatch(eta_2, phi_2, &GenPart_status, &GenPart_pdgId, &GenPart_genPartIdxMother, &GenPart_eta, &GenPart_phi)")
+            rdf = rdf.Define("genind_1", "muon_genmatch(eta_1, phi_1, charge_1, &GenPart_status, &GenPart_pdgId, &GenPart_genPartIdxMother, &GenPart_eta, &GenPart_phi)")
+            rdf = rdf.Define("genind_2", "muon_genmatch(eta_2, phi_2, charge_2, &GenPart_status, &GenPart_pdgId, &GenPart_genPartIdxMother, &GenPart_eta, &GenPart_phi)")
             rdf = rdf.Filter("genind_1 != -99 && genind_2 != -99 && genind_1 != genind_2")
             rdf = rdf.Define("genpt_1", "GenPart_pt[genind_1]").Define("genpt_2", "GenPart_pt[genind_2]")
             rdf = rdf.Define("geneta_1", "GenPart_eta[genind_1]").Define("geneta_2", "GenPart_eta[genind_2]")
@@ -154,7 +155,7 @@ def make_ntuples(nanoAODs, ntuples):
 
 
  
-# start of function to extract z pt distribution
+# start of function to extract z pt distribution. TODO: also for GEN or use reco instead?
 def hist_zpt(ntuples, pt_bins):
     ROOT.gROOT.Reset()
     ROOT.gROOT.SetBatch()
@@ -184,6 +185,7 @@ def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
     # ROOT.gROOT.ProcessLine('tf->Close()')
     hists = []
+    ntuples["GEN"] = ntuples["MC"]
     for s in ntuples:
         rdf = ROOT.RDataFrame("Events", ntuples[s])
         rdf = rdf.Define("z_pT_weight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
@@ -221,6 +223,11 @@ def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
         h.Write()
     tf.Close()
 
+
+
+
+
+
 if __name__=='__main__':
 
     pt_bins = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 140, 200]
@@ -240,6 +247,6 @@ if __name__=='__main__':
         'MC': f"{datadir}MC_ntuples.root",
         'DATA': f"{datadir}DATA_ntuples.root",
     }
-    # make_ntuples(nanoAODs, ntuples)
+    make_ntuples(nanoAODs, ntuples)
     hist_zpt(ntuples, pt_bins)
     hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins)
