@@ -272,6 +272,20 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins):
     tf.Close()
 
 
+def hist_ntuples(ntuples, var, nbins, low, up):  
+    #make histogram of any variable in ntuple (e.g. "mass_Z" )
+    hists=[]
+    for s in ntuples:
+        rdf = ROOT.RDataFrame("Events", ntuples[s])
+        h_info=(var+"_"+s, var+" "+s, nbins, low, up)
+        hists.append(rdf.Histo1D(h_info, var))
+    
+    tf = ROOT.TFile("mass_z_hist.root", "RECREATE")
+    for h in hists:
+        h.Write()
+    tf.Close()
+
+
 if __name__=='__main__':
 
     pt_bins = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 140, 200]
