@@ -245,10 +245,11 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins):
             oneOverPt_hists[f"{s}_mean_{np}"] = h_tmp.Project3DProfile("xy")
             oneOverPt_hists[f"{s}_mean_{np}"].SetDirectory(ROOT.nullptr)
     tf.Close()
-    print(samples)
+    #print(samples)
     # define correction factor C from paper as root 3d histogram
     C = {}
-    for s in nutples:
+    for s in ntuples:
+        print(s)
         C[s] = ROOT.TH3D(
             f"C_{s}", "",
             len(charge_bins)-1, array('f', charge_bins),
@@ -265,7 +266,7 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins):
                         charge+1, eta+1, phi+1,
                         mean_gen - mean
                     )
-    
+                    print(mean_gen, mean)
     tf = ROOT.TFile("C.root", "RECREATE")
     for s in ntuples:
         C[s].Write()
@@ -286,10 +287,11 @@ def hist_ntuples(ntuples, var, nbins, low, up):
     tf.Close()
 
 
+
 if __name__=='__main__':
 
     pt_bins = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 140, 200]
-    oneOverpT_bins = [i/2000. for i in range(200)]
+    oneOverpT_bins = np.linspace(1/200,1/5, 100000)#[i/2000000. for i in range(200000)]
     eta_bins = [-2.4, -0.8, 0.8, 2.4]
     phi_bins = [-3.2, 0, 3.2]
     charge_bins = [-2,0,2]
@@ -306,7 +308,8 @@ if __name__=='__main__':
         'MC': f"{datadir}MC_ntuples.root",
         'DATA': f"{datadir}DATA_ntuples.root",
     }
-    # make_ntuples(nanoAODs, ntuples)
-    # hist_zpt(ntuples, pt_bins)
-    # hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins)
+    #make_ntuples(nanoAODs, ntuples)
+    #hist_zpt(ntuples, pt_bins)
+    hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins)
     get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins)
+    hist_ntuples(ntuples, "mass_Z", 90, 60, 120)
