@@ -2,9 +2,13 @@ import ROOT
 import numpy as np
 import matplotlib.pyplot as plt
 from array import array
-import python.ntuple as ntuple
 from argparse import ArgumentParser
 import os
+
+# import modules
+import python.ntuple as ntuple
+import python.scale_corr as corr
+
 
 
 def parse_args():
@@ -28,94 +32,17 @@ def parse_args():
         default=False,
         help="Make scale correction"
     )
+    parser.add_argument(
+        '-P',
+        '--plot',
+        default=False,
+        action='store_true',
+        help='Make plots'
+    )
     args = parser.parse_args()
     return args
 
 
-
-def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins, hdir):
-    # ROOT.gROOT.ProcessLine('tf->Close()')
-    hists = []
-    ntuples["GEN"] = ntuples["MC"]
-    for s in ntuples:
-        gen = ""
-        if s == "GEN":
-            gen == "gen"
-
-        rdf = ROOT.RDataFrame("Events", ntuples[s])
-        rdf = rdf.Define("oneOverpT_1", f"1./{gen}pt_1")
-        rdf = rdf.Define("oneOverpT_2", f"1./{gen}pt_2")
-        h_neg = rdf.Histo3D(
-            (
-                f"h_oneOverpT_{s}_neg", "", 
-                len(eta_bins)-1, array('f', eta_bins), 
-                len(phi_bins)-1, array('f', phi_bins), 
-                len(oneOverpT_bins)-1, array('f', oneOverpT_bins)
-            ),
-            f"{gen}eta_1",
-            f"{gen}phi_1",
-            "oneOverpT_1",
-            "zPtWeight" # TODO: improve method. averaging over bins not precise enough
-        )
-        hists.append(h_neg)
-        h_pos = rdf.Histo3D(
-            (
-                f"h_oneOverpT_{s}_pos", "",
-                len(eta_bins)-1, array('f', eta_bins), 
-                len(phi_bins)-1, array('f', phi_bins), 
-                len(oneOverpT_bins)-1, array('f', oneOverpT_bins)
-            ),
-            f"{gen}eta_1",
-            f"{gen}phi_1",
-            "oneOverpT_2",
-            "zPtWeight"
-        )
-        hists.append(h_pos)
-    tf = ROOT.TFile(f"{hdir}oneOverpT.root","RECREATE")
-    for h in hists:
-        h.Write()
-    tf.Close()
-
-
-
-def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
-    negpos = ["neg", "pos"]
-
-    # get 3D histograms from TFile
-    tf = ROOT.TFile(f"{hdir}oneOverpT.root", "READ")
-    oneOverPt_hists = {}
-    for s in list(ntuples.keys())+["GEN"]:
-        for np in negpos:
-            h_tmp = tf.Get(f"h_oneOverpT_{s}_{np}")
-            oneOverPt_hists[f"{s}_mean_{np}"] = h_tmp.Project3DProfile("xy")
-            oneOverPt_hists[f"{s}_mean_{np}"].SetDirectory(ROOT.nullptr)
-    tf.Close()
-    #print(samples)
-    # define correction factor C from paper as root 3d histogram
-    C = {}
-    for s in ntuples:
-        print(s)
-        C[s] = ROOT.TH3D(
-            f"C_{s}", "",
-            len(charge_bins)-1, array('f', charge_bins),
-            len(eta_bins)-1, array('f', eta_bins),
-            len(phi_bins)-1, array('f', phi_bins)
-        )
-
-        for eta in range(len(eta_bins)-1):
-            for phi in range(len(phi_bins)-1):
-                for charge in range(len(charge_bins)-1):
-                    mean_gen = oneOverPt_hists[f"GEN_mean_{negpos[charge]}"].GetBinContent(phi+1, eta+1)
-                    mean = oneOverPt_hists[f"{s}_mean_{negpos[charge]}"].GetBinContent(phi+1, eta+1)
-                    C[s].SetBinContent(
-                        charge+1, eta+1, phi+1,
-                        mean_gen - mean
-                    )
-                    print(mean_gen, mean)
-    tf = ROOT.TFile(f"{hdir}C.root", "RECREATE")
-    for s in ntuples:
-        C[s].Write()
-    tf.Close()
 
 
 def hist_ntuples(ntuples, var, nbins, low, up, hdir):  
@@ -130,6 +57,7 @@ def hist_ntuples(ntuples, var, nbins, low, up, hdir):
     for h in hists:
         h.Write()
     tf.Close()
+
 
 
 
@@ -153,7 +81,12 @@ if __name__=='__main__':
         'DATA': f"{datadir}DATA_ntuples.root",
         'MC': f"{datadir}MC_ntuples.root",
     }
+    ntuples_corr = {
+        'DATA': f"{datadir}DATA_ntuples_corr.root",
+        'MC': f"{datadir}MC_ntuples_corr.root",
+    }
     hdir = 'hists/'
+    pdir = 'plots/'
 
     args = parse_args()
 
@@ -165,6 +98,10 @@ if __name__=='__main__':
 
     if args.scale:
         os.makedirs(hdir, exist_ok=True)
-        hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins, hdir)
-        get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)
-        hist_ntuples(ntuples, "mass_Z", 90, 60, 120, hdir)
+        corr.hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins, hdir)
+        corr.get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)
+        corr.apply_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)
+
+    if args.plot:
+        os.makedirs(pdir, exist_ok=True)
+        corr.hist_ntuples(ntuples, "mass_Z", 90, 60, 120, hdir)
