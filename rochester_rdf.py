@@ -8,8 +8,7 @@ import os
 # import modules
 import python.ntuple as ntuple
 import python.scale_corr as corr
-
-
+import utils
 
 def parse_args():
     parser = ArgumentParser(
@@ -45,7 +44,11 @@ def parse_args():
 
 
 
-def hist_ntuples(ntuples, var, nbins, low, up, hdir):  
+def hist_ntuples(
+    ntuples,
+    var, nbins, low, up, 
+    hdir, fname, option="update"
+    ):  
     #make histogram of any variable in ntuple (e.g. "mass_Z" )
     hists=[]
     for s in ntuples:
@@ -53,11 +56,26 @@ def hist_ntuples(ntuples, var, nbins, low, up, hdir):
         h_info=(var+"_"+s, var+" "+s, nbins, low, up)
         hists.append(rdf.Histo1D(h_info, var))
     
-    tf = ROOT.TFile(f"{hdir}mass_z_hist.root", "RECREATE")
+    tf = ROOT.TFile(f"{hdir}{fname}.root", option)
     for h in hists:
         h.Write()
     tf.Close()
 
+
+
+def plot_hists(hfile, hists, outfile):
+    tf = ROOT.TFile(hfile, "READ")
+    h_mc = tf.Get(hists['MC'])
+    h_dt = tf.Get(hists['DATA'])
+
+    utils.plot_ratio(
+        plots = {
+            'mc': h_mc,
+            'dt': h_dt,
+        },
+        title='',
+        outfile=outfile
+    )
 
 
 
@@ -104,4 +122,22 @@ if __name__=='__main__':
 
     if args.plot:
         os.makedirs(pdir, exist_ok=True)
-        corr.hist_ntuples(ntuples, "mass_Z", 90, 60, 120, hdir)
+        hist_ntuples(ntuples_corr, "mass_Z", 90, 60, 120, hdir, "mass_z", "RECREATE")
+        hist_ntuples(ntuples_corr, "mass_Z_roccor", 90, 60, 120, hdir, "mass_z")
+        plot_hists(
+            hfile='hists/mass_z.root',
+            hists={
+                'MC': "mass_Z_MC",
+                'DATA': "mass_Z_DATA"
+            },
+            outfile=f"{pdir}mass_z"
+        )
+        plot_hists(
+            hfile='hists/mass_z.root',
+            hists={
+                'MC': "mass_Z_roccor_MC",
+                'DATA': "mass_Z_roccor_DATA"
+            },
+            outfile=f"{pdir}mass_z_roccor"
+        )
+        
