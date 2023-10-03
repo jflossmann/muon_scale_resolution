@@ -31,7 +31,9 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
+
+
+def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins, hdir):
     # ROOT.gROOT.ProcessLine('tf->Close()')
     hists = []
     ntuples["GEN"] = ntuples["MC"]
@@ -53,7 +55,7 @@ def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
             f"{gen}eta_1",
             f"{gen}phi_1",
             "oneOverpT_1",
-            "z_pT_weight" # TODO: improve method. averaging over bins not precise enough
+            "zPtWeight" # TODO: improve method. averaging over bins not precise enough
         )
         hists.append(h_neg)
         h_pos = rdf.Histo3D(
@@ -66,17 +68,17 @@ def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
             f"{gen}eta_1",
             f"{gen}phi_1",
             "oneOverpT_2",
-            "z_pT_weight"
+            "zPtWeight"
         )
         hists.append(h_pos)
-    tf = ROOT.TFile("oneOverpT.root","RECREATE")
+    tf = ROOT.TFile(f"{hdir}oneOverpT.root","RECREATE")
     for h in hists:
         h.Write()
     tf.Close()
 
 
 
-def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins):
+def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
     negpos = ["neg", "pos"]
 
     # get 3D histograms from TFile
@@ -110,13 +112,13 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins):
                         mean_gen - mean
                     )
                     print(mean_gen, mean)
-    tf = ROOT.TFile("C.root", "RECREATE")
+    tf = ROOT.TFile(f"{hdir}C.root", "RECREATE")
     for s in ntuples:
         C[s].Write()
     tf.Close()
 
 
-def hist_ntuples(ntuples, var, nbins, low, up):  
+def hist_ntuples(ntuples, var, nbins, low, up, hdir):  
     #make histogram of any variable in ntuple (e.g. "mass_Z" )
     hists=[]
     for s in ntuples:
@@ -124,7 +126,7 @@ def hist_ntuples(ntuples, var, nbins, low, up):
         h_info=(var+"_"+s, var+" "+s, nbins, low, up)
         hists.append(rdf.Histo1D(h_info, var))
     
-    tf = ROOT.TFile("mass_z_hist.root", "RECREATE")
+    tf = ROOT.TFile(f"{hdir}mass_z_hist.root", "RECREATE")
     for h in hists:
         h.Write()
     tf.Close()
@@ -151,17 +153,18 @@ if __name__=='__main__':
         'DATA': f"{datadir}DATA_ntuples.root",
         'MC': f"{datadir}MC_ntuples.root",
     }
-    hists = 'hists/'
+    hdir = 'hists/'
 
     args = parse_args()
 
     if args.ntuples:
         ntuple.make_ntuples(nanoAODs, ntuples, pt_bins)
-        os.makedirs(hists, exist_ok=True)
-        ntuple.hist_zpt(ntuples, pt_bins, hists)
+        os.makedirs(hdir, exist_ok=True)
+        ntuple.hist_zpt(ntuples, pt_bins, hdir)
         ntuple.weight_zpt(ntuples)
 
     if args.scale:
-        hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins)
-        get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins)
-        hist_ntuples(ntuples, "mass_Z", 90, 60, 120)
+        os.makedirs(hdir, exist_ok=True)
+        hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins, hdir)
+        get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)
+        hist_ntuples(ntuples, "mass_Z", 90, 60, 120, hdir)

@@ -139,7 +139,7 @@ ROOT.gInterpreter.Declare(
 
 
 # function to make z_pt distributions 
-def hist_zpt(ntuples, pt_bins, hists):
+def hist_zpt(ntuples, pt_bins, hdir):
     ROOT.gROOT.Reset()
     ROOT.gROOT.SetBatch()
     ROOT.gStyle.SetOptStat(0)
@@ -153,7 +153,7 @@ def hist_zpt(ntuples, pt_bins, hists):
         h.Scale(1./h.Integral())
         hists.append(h)
 
-    tf = ROOT.TFile(f"{hists}z_reweighting.root", "RECREATE")
+    tf = ROOT.TFile(f"{hdir}z_reweighting.root", "RECREATE")
     for h in hists:
         h.Write()
     tf.Close()
