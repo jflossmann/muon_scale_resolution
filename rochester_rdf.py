@@ -5,7 +5,16 @@ from array import array
 
 # function in c++ code. Finds indices of muons closest to z boson mass
 ROOT.gInterpreter.Declare("""
-    ROOT::VecOps::RVec<Int_t> get_indices(UInt_t nMuon, ROOT::VecOps::RVec<Float_t> *Muon_pt, ROOT::VecOps::RVec<Float_t> *Muon_eta, ROOT::VecOps::RVec<Float_t> *Muon_phi, ROOT::VecOps::RVec<Float_t> *Muon_mass, ROOT::VecOps::RVec<Float_t> *Muon_tkRelIso, ROOT::VecOps::RVec<Bool_t> *Muon_mediumId, ROOT::VecOps::RVec<Int_t> *Muon_charge){
+    ROOT::VecOps::RVec<Int_t> get_indices(
+        UInt_t nMuon,
+        ROOT::VecOps::RVec<Float_t> *Muon_pt,
+        ROOT::VecOps::RVec<Float_t> *Muon_eta,
+        ROOT::VecOps::RVec<Float_t> *Muon_phi,
+        ROOT::VecOps::RVec<Float_t> *Muon_mass,
+        ROOT::VecOps::RVec<Float_t> *Muon_tkRelIso,
+        ROOT::VecOps::RVec<Bool_t> *Muon_mediumId,
+        ROOT::VecOps::RVec<Int_t> *Muon_charge
+        ){
         Float_t deltaM = 1000;
         Int_t ind1, ind2;
         ind1 = -99;
@@ -24,8 +33,18 @@ ROOT.gInterpreter.Declare("""
                 if(Muon_charge->at(i) * Muon_charge->at(j) > 0) continue;
 
                 TLorentzVector mui, muj, Z;
-                mui.SetPtEtaPhiM(Muon_pt->at(i), Muon_eta->at(i), Muon_phi->at(i), Muon_mass->at(i));
-                muj.SetPtEtaPhiM(Muon_pt->at(j), Muon_eta->at(j), Muon_phi->at(j), Muon_mass->at(j));
+                mui.SetPtEtaPhiM(
+                    Muon_pt->at(i),
+                    Muon_eta->at(i),
+                    Muon_phi->at(i),
+                    Muon_mass->at(i)
+                );
+                muj.SetPtEtaPhiM(
+                    Muon_pt->at(j),
+                    Muon_eta->at(j),
+                    Muon_phi->at(j),
+                    Muon_mass->at(j)
+                );
                 Z = mui + muj;
                 if (fabs(Z.M() - 91.1876) < deltaM){
                     deltaM = fabs(Z.M() - 91.1876);
@@ -51,7 +70,16 @@ ROOT.gInterpreter.Declare("""
 # function in c++ code. Finds indices of muons matched to HLT; TODO look up definition of hlt
 #ROOT.gInterpreter.Declare(
 """
-    ROOT::VecOps::RVec<Int_t> get_hlt_matches(UInt_t nMuon, ROOT::VecOps::RVec<Float_t> *Muon_pt, ROOT::VecOps::RVec<Float_t> *Muon_eta, ROOT::VecOps::RVec<Float_t> *Muon_phi, ROOT::VecOps::RVec<Float_t> *hlt_eta, ROOT::VecOps::RVec<Float_t> *hlt_phi, ROOT::VecOps::RVec<Float_t> *Muon_tkRelIso, ROOT::VecOps::RVec<Float_t> *Muon_mediumPromptId){
+    ROOT::VecOps::RVec<Int_t> get_hlt_matches(
+        UInt_t nMuon,
+        ROOT::VecOps::RVec<Float_t> *Muon_pt,
+        ROOT::VecOps::RVec<Float_t> *Muon_eta,
+        ROOT::VecOps::RVec<Float_t> *Muon_phi,
+        ROOT::VecOps::RVec<Float_t> *hlt_eta,
+        ROOT::VecOps::RVec<Float_t> *hlt_phi,
+        ROOT::VecOps::RVec<Float_t> *Muon_tkRelIso,
+        ROOT::VecOps::RVec<Float_t> *Muon_mediumPromptId
+        ){
         ROOT::VecOps::RVec<Int_t> muon_hlt_match;
         for(int i=0; i<nMuon; i++){
             if(muon_hlt_match.size()>1) continue;
@@ -76,7 +104,16 @@ ROOT.gInterpreter.Declare("""
 # function in c++ code. Finds indices of muons matched to GEN
 ROOT.gInterpreter.Declare(
 """
-    Int_t muon_genmatch(Float_t eta, Float_t phi, Int_t charge, ROOT::VecOps::RVec<Int_t> *GenPart_status, ROOT::VecOps::RVec<Int_t> *GenPart_pdgId, ROOT::VecOps::RVec<Int_t> *GenPart_genPartIdxMother, ROOT::VecOps::RVec<Float_t> *GenPart_eta, ROOT::VecOps::RVec<Float_t> *GenPart_phi){
+    Int_t muon_genmatch(
+        Float_t eta,
+        Float_t phi,
+        Int_t charge,
+        ROOT::VecOps::RVec<Int_t> *GenPart_status,
+        ROOT::VecOps::RVec<Int_t> *GenPart_pdgId,
+        ROOT::VecOps::RVec<Int_t> *GenPart_genPartIdxMother,
+        ROOT::VecOps::RVec<Float_t> *GenPart_eta,
+        ROOT::VecOps::RVec<Float_t> *GenPart_phi
+    ){
         Int_t index=-99;
         
         Float_t deltaR=0.1;
@@ -116,14 +153,29 @@ def make_ntuples(nanoAODs, ntuples):
         
         # only collect events w/ >1 muon and find muon pair closest to z mass. Muon1 is always charge -1 and muon2 always +1
         rdf = rdf.Filter("Muon_pt.size() > 1")
-        rdf = rdf.Define("ind", "ROOT::VecOps::RVec<Int_t> (get_indices(nMuon, &Muon_pt, &Muon_eta, &Muon_phi, &Muon_mass, &Muon_tkRelIso, &Muon_mediumId, &Muon_charge))")
-        rdf = rdf.Define("ind0", "ind[0]").Define("ind1", "ind[1]")
+        rdf = rdf.Define("ind", """ROOT::VecOps::RVec<Int_t> (get_indices(
+                         nMuon,
+                         &Muon_pt,
+                         &Muon_eta,
+                         &Muon_phi,
+                         &Muon_mass,
+                         &Muon_tkRelIso,
+                         &Muon_mediumId,
+                         &Muon_charge
+                         ))""")
+        rdf = rdf.Define("ind0", "ind[0]")
+        rdf = rdf.Define("ind1", "ind[1]")
         rdf = rdf.Filter("ind0 + ind1 > 0")
-        rdf = rdf.Define("pt_1", "Muon_pt[ind[0]]").Define("pt_2", "Muon_pt[ind[1]]")
-        rdf = rdf.Define("mass_1", "Muon_mass[ind[0]]").Define("mass_2", "Muon_mass[ind[1]]")
-        rdf = rdf.Define("eta_1", "Muon_eta[ind[0]]").Define("eta_2", "Muon_eta[ind[1]]")
-        rdf = rdf.Define("phi_1", "Muon_phi[ind[0]]").Define("phi_2", "Muon_phi[ind[1]]")
-        rdf = rdf.Define("charge_1", "Muon_charge[ind[0]]").Define("charge_2", "Muon_charge[ind[1]]")
+        rdf = rdf.Define("pt_1", "Muon_pt[ind[0]]")
+        rdf = rdf.Define("pt_2", "Muon_pt[ind[1]]")
+        rdf = rdf.Define("mass_1", "Muon_mass[ind[0]]")
+        rdf = rdf.Define("mass_2", "Muon_mass[ind[1]]")
+        rdf = rdf.Define("eta_1", "Muon_eta[ind[0]]")
+        rdf = rdf.Define("eta_2", "Muon_eta[ind[1]]")
+        rdf = rdf.Define("phi_1", "Muon_phi[ind[0]]")
+        rdf = rdf.Define("phi_2", "Muon_phi[ind[1]]")
+        rdf = rdf.Define("charge_1", "Muon_charge[ind[0]]")
+        rdf = rdf.Define("charge_2", "Muon_charge[ind[1]]")
 
         # Define quantities of Z boson and collect those events with 50 < m_Z < 130
         rdf = rdf.Define("p4_1", "ROOT::Math::PtEtaPhiMVector(pt_1, eta_1, phi_1, mass_1)")
@@ -138,13 +190,35 @@ def make_ntuples(nanoAODs, ntuples):
         
         if s=="MC":
             # perform gen delta R matching and collect corresponding events and gen quantities
-            rdf = rdf.Define("genind_1", "muon_genmatch(eta_1, phi_1, charge_1, &GenPart_status, &GenPart_pdgId, &GenPart_genPartIdxMother, &GenPart_eta, &GenPart_phi)")
-            rdf = rdf.Define("genind_2", "muon_genmatch(eta_2, phi_2, charge_2, &GenPart_status, &GenPart_pdgId, &GenPart_genPartIdxMother, &GenPart_eta, &GenPart_phi)")
+            rdf = rdf.Define("genind_1", """muon_genmatch(
+                                                eta_1,
+                                                phi_1,
+                                                charge_1,
+                                                &GenPart_status,
+                                                &GenPart_pdgId,
+                                                &GenPart_genPartIdxMother,
+                                                &GenPart_eta,
+                                                &GenPart_phi
+                                                )""")
+            rdf = rdf.Define("genind_2", """muon_genmatch(
+                                                eta_2,
+                                                phi_2,
+                                                charge_2,
+                                                &GenPart_status,
+                                                &GenPart_pdgId,
+                                                &GenPart_genPartIdxMother,
+                                                &GenPart_eta,
+                                                &GenPart_phi
+                                                )""")
             rdf = rdf.Filter("genind_1 != -99 && genind_2 != -99 && genind_1 != genind_2")
-            rdf = rdf.Define("genpt_1", "GenPart_pt[genind_1]").Define("genpt_2", "GenPart_pt[genind_2]")
-            rdf = rdf.Define("geneta_1", "GenPart_eta[genind_1]").Define("geneta_2", "GenPart_eta[genind_2]")
-            rdf = rdf.Define("genphi_1", "GenPart_phi[genind_1]").Define("genphi_2", "GenPart_phi[genind_2]")
-            rdf = rdf.Define("genmass_1", "GenPart_mass[genind_1]").Define("genmass_2", "GenPart_mass[genind_2]")
+            rdf = rdf.Define("genpt_1", "GenPart_pt[genind_1]")
+            rdf = rdf.Define("genpt_2", "GenPart_pt[genind_2]")
+            rdf = rdf.Define("geneta_1", "GenPart_eta[genind_1]")
+            rdf = rdf.Define("geneta_2", "GenPart_eta[genind_2]")
+            rdf = rdf.Define("genphi_1", "GenPart_phi[genind_1]")
+            rdf = rdf.Define("genphi_2", "GenPart_phi[genind_2]")
+            rdf = rdf.Define("genmass_1", "GenPart_mass[genind_1]")
+            rdf = rdf.Define("genmass_2", "GenPart_mass[genind_2]")
             
             quants += [
                 "genpt_1", "genmass_1", "geneta_1", "genphi_1",
