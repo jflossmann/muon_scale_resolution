@@ -1,8 +1,6 @@
 import ROOT
 from array import array
 
-
-
 # function in c++ code. Finds indices of muons closest to z boson mass
 ROOT.gInterpreter.Declare("""
     ROOT::VecOps::RVec<Int_t> get_indices(
@@ -141,7 +139,7 @@ ROOT.gInterpreter.Declare(
 
 
 # function to make z_pt distributions 
-def hist_zpt(ntuples, pt_bins):
+def hist_zpt(ntuples, pt_bins, hists):
     ROOT.gROOT.Reset()
     ROOT.gROOT.SetBatch()
     ROOT.gStyle.SetOptStat(0)
@@ -155,7 +153,7 @@ def hist_zpt(ntuples, pt_bins):
         h.Scale(1./h.Integral())
         hists.append(h)
 
-    tf = ROOT.TFile("z_reweighting.root", "RECREATE")
+    tf = ROOT.TFile(f"{hists}z_reweighting.root", "RECREATE")
     for h in hists:
         h.Write()
     tf.Close()
@@ -183,6 +181,8 @@ def weight_zpt(ntuples):
         rdf.Snapshot("Events", ntuples[s], quants)
 
     return
+
+
 
 def make_ntuples(nanoAODs, ntuples, pt_bins):
     for s in nanoAODs:
@@ -273,16 +273,12 @@ def make_ntuples(nanoAODs, ntuples, pt_bins):
         # make output with interesting data
         rdf.Snapshot("Events", ntuples[s], quants)
 
-
-
-
- 
+    return
 
 
 
 if __name__=='__main__':
     pt_bins = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 140, 200]
-
     nanoAODs = {
         'MC': f"{datadir}MC.root",
         'DATA': f"{datadir}DATA.root",
@@ -291,6 +287,8 @@ if __name__=='__main__':
         'MC': f"{datadir}MC_ntuples.root",
         'DATA': f"{datadir}DATA_ntuples.root",
     }
-    ntuple.make_ntuples(nanoAODs, ntuples, pt_bins)
+    hists = 'hists/'
+
+    ntuple.make_ntuples(nanoAODs, ntuples, pt_bins, hists)
     ntuple.hist_zpt(ntuples, pt_bins)
     ntuple.weight_zpt(ntuples)

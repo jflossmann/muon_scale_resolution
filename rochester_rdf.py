@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from array import array
 import python.ntuple as ntuple
 from argparse import ArgumentParser
+import os
+
 
 def parse_args():
     parser = ArgumentParser(
@@ -15,17 +17,19 @@ def parse_args():
     parser.add_argument(
         '-N',
         '--ntuples',
-        action=store_true,
+        action='store_true',
         default=False,
-        description="produce ntuples from NanoAOD"
+        help="produce ntuples from NanoAOD"
     )
     parser.add_argument(
         '-S',
         '--scale',
-        action=store_true,
+        action='store_true',
         default=False,
-        description="Make scale correction"
+        help="Make scale correction"
     )
+    args = parser.parse_args()
+    return args
 
 def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
     # ROOT.gROOT.ProcessLine('tf->Close()')
@@ -147,12 +151,14 @@ if __name__=='__main__':
         'DATA': f"{datadir}DATA_ntuples.root",
         'MC': f"{datadir}MC_ntuples.root",
     }
+    hists = 'hists/'
 
     args = parse_args()
 
     if args.ntuples:
         ntuple.make_ntuples(nanoAODs, ntuples, pt_bins)
-        ntuple.hist_zpt(ntuples, pt_bins)
+        os.makedirs(hists, exist_ok=True)
+        ntuple.hist_zpt(ntuples, pt_bins, hists)
         ntuple.weight_zpt(ntuples)
 
     if args.scale:
