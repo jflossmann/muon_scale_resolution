@@ -3,7 +3,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 from array import array
 import python.ntuple as ntuple
+from argparse import ArgumentParser
 
+def parse_args():
+    parser = ArgumentParser(
+        description="""
+            Rochester correction calculator
+            *** add more information ***
+        """
+    )
+    parser.add_argument(
+        '-N',
+        '--ntuples',
+        action=store_true,
+        default=False,
+        description="produce ntuples from NanoAOD"
+    )
+    parser.add_argument(
+        '-S',
+        '--scale',
+        action=store_true,
+        default=False,
+        description="Make scale correction"
+    )
 
 def hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins):
     # ROOT.gROOT.ProcessLine('tf->Close()')
@@ -125,9 +147,15 @@ if __name__=='__main__':
         'DATA': f"{datadir}DATA_ntuples.root",
         'MC': f"{datadir}MC_ntuples.root",
     }
-    ntuple.make_ntuples(nanoAODs, ntuples, pt_bins)
-    ntuple.hist_zpt(ntuples, pt_bins)
-    ntuple.weight_zpt(ntuples)
-    # hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins)
-    # get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins)
-    # hist_ntuples(ntuples, "mass_Z", 90, 60, 120)
+
+    args = parse_args()
+
+    if args.ntuples:
+        ntuple.make_ntuples(nanoAODs, ntuples, pt_bins)
+        ntuple.hist_zpt(ntuples, pt_bins)
+        ntuple.weight_zpt(ntuples)
+
+    if args.scale:
+        hist_oneOverpT(ntuples, oneOverpT_bins, eta_bins, phi_bins)
+        get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins)
+        hist_ntuples(ntuples, "mass_Z", 90, 60, 120)
