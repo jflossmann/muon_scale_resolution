@@ -82,7 +82,7 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
     negpos = ["neg", "pos"]
 
     # get 3D histograms from TFile
-    tf = ROOT.TFile("oneOverpT.root", "READ")
+    tf = ROOT.TFile(f"{hdir}oneOverpT.root", "READ")
     oneOverPt_hists = {}
     for s in list(ntuples.keys())+["GEN"]:
         for np in negpos:
@@ -105,8 +105,8 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
         for eta in range(len(eta_bins)-1):
             for phi in range(len(phi_bins)-1):
                 for charge in range(len(charge_bins)-1):
-                    mean_gen = oneOverPt_hists[f"GEN_mean_{negpos[charge]}"].GetBinContent(eta+1, phi+1)
-                    mean = oneOverPt_hists[f"{s}_mean_{negpos[charge]}"].GetBinContent(eta+1, phi+1)
+                    mean_gen = oneOverPt_hists[f"GEN_mean_{negpos[charge]}"].GetBinContent(phi+1, eta+1)
+                    mean = oneOverPt_hists[f"{s}_mean_{negpos[charge]}"].GetBinContent(phi+1, eta+1)
                     C[s].SetBinContent(
                         charge+1, eta+1, phi+1,
                         mean_gen - mean
@@ -136,7 +136,7 @@ def hist_ntuples(ntuples, var, nbins, low, up, hdir):
 if __name__=='__main__':
 
     pt_bins = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 140, 200]
-    oneOverpT_bins = np.linspace(1/200,1/5, 100000)#[i/2000000. for i in range(200000)]
+    oneOverpT_bins = np.linspace(1/200,1/5, 1000000)#[i/2000000. for i in range(200000)]
     eta_bins = [-2.4, -0.8, 0.8, 2.4]
     phi_bins = [-3.2, 0, 3.2]
     charge_bins = [-2,0,2]
