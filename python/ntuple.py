@@ -1,5 +1,6 @@
 import ROOT
 from array import array
+import yaml
 
 # function in c++ code. Finds indices of muons closest to z boson mass
 ROOT.gInterpreter.Declare("""
@@ -163,8 +164,8 @@ def hist_zpt(ntuples, pt_bins, hdir):
 
 
 # function to add z pt weight. TODO: also for GEN or use reco instead?
-def weight_zpt(ntuples):
-    ROOT.gROOT.ProcessLine('TFile* tf = TFile::Open("z_reweighting.root", "READ");')
+def weight_zpt(ntuples, hdir):
+    ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}z_reweighting.root", "READ");')
     ROOT.gROOT.ProcessLine('TH1D* h_dt = (TH1D*)tf->Get("h_Zboson_pt_DATA");')
     ROOT.gROOT.ProcessLine('TH1D* h_mc = (TH1D*)tf->Get("h_Zboson_pt_MC");')
     ROOT.gROOT.ProcessLine('TH1D* h_ratio = (TH1D*)h_dt->Clone();')
@@ -274,6 +275,13 @@ def make_ntuples(nanoAODs, ntuples, pt_bins):
         rdf.Snapshot("Events", ntuples[s], quants)
 
     return
+
+
+def yaml_loader(fname):
+    with open(fname, "r") as f:
+        dsets = yaml.load(f, Loader=yaml.Loader)
+    #print(dsets)
+    return dsets
 
 
 

@@ -1,0 +1,15 @@
+"DATA":
+  "names":
+    - /SingleMuon/Run2018D-UL2018_MiniAODv2_NanoAODv9-v1/NANOAOD
+  "gjson":
+    configs/jsons/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt
+  "type":
+    data
+
+"MC":
+  "names":
+    - /DYJetsToLL_M-50_TuneCP5_13TeV-madgraphMLM-pythia8/RunIISummer20UL18NanoAODv2-106X_upgrade2018_realistic_v15_L1v1-v1/NANOAODSIM
+  "gjson":
+    dummy
+  "type":
+    mc
