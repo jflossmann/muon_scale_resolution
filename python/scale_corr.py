@@ -9,7 +9,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir):
     for s in ntuples_tmp:
         gen = ""
         if s == "GEN":
-            gen == "gen"
+            gen = "gen"
 
         rdf = ROOT.RDataFrame("Events", ntuples_tmp[s])
         rdf = rdf.Define("oneOverPt_1", f"1./{gen}pt_1")
