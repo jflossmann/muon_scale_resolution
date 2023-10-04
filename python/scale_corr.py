@@ -26,7 +26,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir):
             "oneOverPt_1",
             "zPtWeight" # TODO: improve method. averaging over bins not precise enough
         )
-        hists += [h_neg, h_neg.Project3DProfile("xy")]
+        hists += [h_neg, h_neg.Project3DProfile("yx")]
         h_pos = rdf.Histo3D(
             (
                 f"h_oneOverPt_{s}_pos", "",
@@ -39,7 +39,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir):
             "oneOverPt_2",
             "zPtWeight"
         )
-        hists += [h_pos, h_pos.Project3DProfile("xy")]
+        hists += [h_pos, h_pos.Project3DProfile("yx")]
     tf = ROOT.TFile(f"{hdir}oneOverPt.root","RECREATE")
     for h in hists:
         h.Write()
@@ -55,7 +55,7 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
     oneOverPt_hists = {}
     for s in list(ntuples.keys())+["GEN"]:
         for np in negpos:
-            oneOverPt_hists[f"{s}_mean_{np}"] = tf.Get(f'h_oneOverPt_{s}_{np}_pxy')
+            oneOverPt_hists[f"{s}_mean_{np}"] = tf.Get(f'h_oneOverPt_{s}_{np}_pyx')
             oneOverPt_hists[f"{s}_mean_{np}"].SetDirectory(ROOT.nullptr)
     tf.Close()
 
@@ -93,8 +93,8 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
         for eta in range(len(eta_bins)-1):
             for phi in range(len(phi_bins)-1):
                 for charge in range(len(charge_bins)-1):
-                    mean_gen = oneOverPt_hists[f"GEN_mean_{negpos[charge]}"].GetBinContent(phi+1, eta+1)
-                    mean = oneOverPt_hists[f"{s}_mean_{negpos[charge]}"].GetBinContent(phi+1, eta+1)
+                    mean_gen = oneOverPt_hists[f"GEN_mean_{negpos[charge]}"].GetBinContent(eta+1, phi+1)
+                    mean = oneOverPt_hists[f"{s}_mean_{negpos[charge]}"].GetBinContent(eta+1, phi+1)
                     C[s].SetBinContent(
                         charge+1,
                         eta+1,
@@ -116,8 +116,8 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
                     eta+1,
                     phi+1,
                     1 + 2*Dm[s].GetBinContent(eta+1, phi+1) / (
-                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(phi+1, eta+1) + 
-                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(phi+1, eta+1)
+                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(eta+1, phi+1) + 
+                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(eta+1, phi+1)
                     )
                 )
 
@@ -126,11 +126,11 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
                     phi+1,
                     Da[s].GetBinContent(eta+1, phi+1) - (
                         Dm[s].GetBinContent(eta+1, phi+1)*(
-                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(phi+1, eta+1) -
-                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(phi+1, eta+1)
+                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(eta+1, phi+1) -
+                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(eta+1, phi+1)
                     ) / (
-                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(phi+1, eta+1) +
-                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(phi+1, eta+1)
+                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(eta+1, phi+1) +
+                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(eta+1, phi+1)
                     )
                     )
                 )
@@ -202,7 +202,7 @@ def scale_closure(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir):
             "zPtWeight" # TODO: improve method. averaging over bins not precise enough
         )
 
-        hists += [h_neg, h_neg.Project3DProfile("xy")]
+        hists += [h_neg, h_neg.Project3DProfile("yx")]
 
         h_pos = rdf.Histo3D(
             (
@@ -217,7 +217,7 @@ def scale_closure(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir):
             "zPtWeight"
         )
 
-        hists += [h_pos, h_pos.Project3DProfile("xy")]
+        hists += [h_pos, h_pos.Project3DProfile("yx")]
 
     tf = ROOT.TFile(f"{hdir}oneOverPt_roccor.root","RECREATE")
     for h in hists:
