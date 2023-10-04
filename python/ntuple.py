@@ -266,8 +266,8 @@ def make_ntuples(nanoAODs, ntuples, pt_bins):
             rdf = rdf.Define("gencharge_1", "- GenPart_pdgId[genind_1]/fabs(GenPart_pdgId[genind_1])")
             rdf = rdf.Define("gencharge_2", "- GenPart_pdgId[genind_2]/fabs(GenPart_pdgId[genind_2])")
 
-            rdf = rdf.Define("genp4_1", "ROOT::Math::PtEtaPhiMVector(pt_1, eta_1, phi_1, mass_1)")
-            rdf = rdf.Define("genp4_2", "ROOT::Math::PtEtaPhiMVector(pt_2, eta_2, phi_2, mass_2)")
+            rdf = rdf.Define("genp4_1", "ROOT::Math::PtEtaPhiMVector(genpt_1, geneta_1, genphi_1, genmass_1)")
+            rdf = rdf.Define("genp4_2", "ROOT::Math::PtEtaPhiMVector(genpt_2, geneta_2, genphi_2, genmass_2)")
             rdf = rdf.Define("genp4_Z", "genp4_1 + genp4_2")
             rdf = rdf.Define("genpt_Z", "genp4_Z.Pt()")
             rdf = rdf.Define("geneta_Z", "genp4_Z.Eta()")
