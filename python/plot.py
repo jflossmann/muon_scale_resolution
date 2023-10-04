@@ -3,7 +3,7 @@ from array import array
 
 
 
-def plot_ratio(hists, title, outfile, text=['','',''], xrange=[80,102]):
+def plot_ratio(hists, title, outfile, text=['','',''], xrange=[50,130]):
     hists['mc'].Scale(hists['dt'].Integral()/hists['mc'].Integral())
     c = ROOT.TCanvas("c", title, 800, 700)
     ROOT.gROOT.SetBatch(1)
@@ -167,45 +167,45 @@ def plot_stuff(pdir, eta_bins, phi_bins):
     plot_hists(
         hfile='hists/oneOverPt.root',
         hists={
-            'MC': "h_oneOverPt_MC_neg_pxy",
-            'DATA': "h_oneOverPt_DATA_neg_pxy"
+            'MC': "h_oneOverPt_MC_neg_pyx",
+            'DATA': "h_oneOverPt_DATA_neg_pyx"
         },
         outfile=f"{pdir}oneOverPt_neg",
         dim=2,
-        binsx = phi_bins,
-        binsy = eta_bins 
+        binsx = eta_bins,
+        binsy = phi_bins 
     )
     plot_hists(
         hfile='hists/oneOverPt.root',
         hists={
-            'MC': "h_oneOverPt_MC_pos_pxy",
-            'DATA': "h_oneOverPt_DATA_pos_pxy"
+            'MC': "h_oneOverPt_MC_pos_pyx",
+            'DATA': "h_oneOverPt_DATA_pos_pyx"
         },
         outfile=f"{pdir}oneOverPt_pos",
         dim=2,
-        binsx = phi_bins,
-        binsy = eta_bins 
+        binsx = eta_bins,
+        binsy = phi_bins 
     )
 
     plot_hists(
         hfile='hists/oneOverPt_roccor.root',
         hists={
-            'MC': "h_oneOverPt_MC_neg_roccor_pxy",
-            'DATA': "h_oneOverPt_DATA_neg_roccor_pxy"
+            'MC': "h_oneOverPt_MC_neg_roccor_pyx",
+            'DATA': "h_oneOverPt_DATA_neg_roccor_pyx"
         },
         outfile=f"{pdir}oneOverPt_neg_roccor",
         dim=2,
-        binsx = phi_bins,
-        binsy = eta_bins 
+        binsx = eta_bins,
+        binsy = phi_bins 
     )
     plot_hists(
         hfile='hists/oneOverPt_roccor.root',
         hists={
-            'MC': "h_oneOverPt_MC_pos_roccor_pxy",
-            'DATA': "h_oneOverPt_DATA_pos_roccor_pxy"
+            'MC': "h_oneOverPt_MC_pos_roccor_pyx",
+            'DATA': "h_oneOverPt_DATA_pos_roccor_pyx"
         },
         outfile=f"{pdir}oneOverPt_pos_roccor",
         dim=2,
-        binsx = phi_bins,
-        binsy = eta_bins 
+        binsx = eta_bins,
+        binsy = phi_bins 
     )
