@@ -46,7 +46,7 @@ def parse_args():
 if __name__=='__main__':
 
     pt_bins = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 140, 200]
-    oneOverPt_bins = np.linspace(1/200,1/5, 10000)#[i/2000000. for i in range(200000)]
+    oneOverPt_bins = np.linspace(1/200,1/5, 1000)#[i/2000000. for i in range(200000)]
     eta_bins = [-2.4, -1.8, -1.2, -0.6, 0, 0.6, 1.2, 1.8, 2.4]
     phi_bins = [-3.2, -2.4, -1.6, -.8, 0, .8, 1.6, 2.4, 3.2]
     charge_bins = [-2,0,2]
@@ -55,10 +55,7 @@ if __name__=='__main__':
     xsec = 5600
     
     datadir = "/ceph/jdriesch/rochester/"
-    nanoAODs = {
-        'DATA': f"{datadir}DATA.root",
-        'MC': f"{datadir}MC.root",
-    }
+    nanoAODs = ntuple.yaml_loader('configs/nanoAODs.yaml')
     ntuples = {
         'DATA': f"{datadir}DATA_ntuples.root",
         'MC': f"{datadir}MC_ntuples.root",
@@ -76,7 +73,7 @@ if __name__=='__main__':
         ntuple.make_ntuples(nanoAODs, ntuples, pt_bins)
         os.makedirs(hdir, exist_ok=True)
         ntuple.hist_zpt(ntuples, pt_bins, hdir)
-        ntuple.weight_zpt(ntuples)
+        ntuple.weight_zpt(ntuples, hdir)
 
     if args.scale:
         os.makedirs(hdir, exist_ok=True)
