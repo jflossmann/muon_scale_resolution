@@ -198,15 +198,15 @@ def make_ntuples(nanoAODs, ntuples, pt_bins):
         # only collect events w/ >1 muon and find muon pair closest to z mass. Muon1 is always charge -1 and muon2 always +1
         rdf = rdf.Filter("Muon_pt.size() > 1")
         rdf = rdf.Define("ind", """ROOT::VecOps::RVec<Int_t> (get_indices(
-                         nMuon,
-                         &Muon_pt,
-                         &Muon_eta,
-                         &Muon_phi,
-                         &Muon_mass,
-                         &Muon_tkRelIso,
-                         &Muon_mediumId,
-                         &Muon_charge
-                         ))""")
+                                    nMuon,
+                                    &Muon_pt,
+                                    &Muon_eta,
+                                    &Muon_phi,
+                                    &Muon_mass,
+                                    &Muon_tkRelIso,
+                                    &Muon_mediumId,
+                                    &Muon_charge
+                                    ))""")
         rdf = rdf.Define("ind0", "ind[0]")
         rdf = rdf.Define("ind1", "ind[1]")
         rdf = rdf.Filter("ind0 + ind1 > 0")
@@ -263,12 +263,22 @@ def make_ntuples(nanoAODs, ntuples, pt_bins):
             rdf = rdf.Define("genphi_2", "GenPart_phi[genind_2]")
             rdf = rdf.Define("genmass_1", "GenPart_mass[genind_1]")
             rdf = rdf.Define("genmass_2", "GenPart_mass[genind_2]")
+            rdf = rdf.Define("gencharge_1", "- GenPart_pdgId[genind_1]/fabs(GenPart_pdgId[genind_1])")
+            rdf = rdf.Define("gencharge_2", "- GenPart_pdgId[genind_2]/fabs(GenPart_pdgId[genind_2])")
 
+            rdf = rdf.Define("genp4_1", "ROOT::Math::PtEtaPhiMVector(pt_1, eta_1, phi_1, mass_1)")
+            rdf = rdf.Define("genp4_2", "ROOT::Math::PtEtaPhiMVector(pt_2, eta_2, phi_2, mass_2)")
+            rdf = rdf.Define("genp4_Z", "genp4_1 + genp4_2")
+            rdf = rdf.Define("genpt_Z", "genp4_Z.Pt()")
+            rdf = rdf.Define("geneta_Z", "genp4_Z.Eta()")
+            rdf = rdf.Define("genmass_Z", "genp4_Z.M()")
+            rdf = rdf.Define("genphi_Z", "genp4_Z.Phi()")
 
             
             quants += [
-                "genpt_1", "genmass_1", "geneta_1", "genphi_1",
-                "genpt_2", "genmass_2", "geneta_2", "genphi_2"
+                "genpt_1", "genmass_1", "geneta_1", "genphi_1", "gencharge_1",
+                "genpt_2", "genmass_2", "geneta_2", "genphi_2", "gencharge_2",
+                "genpt_Z", "genmass_Z", "geneta_Z", "genphi_Z"
             ]
 
         # make output with interesting data
