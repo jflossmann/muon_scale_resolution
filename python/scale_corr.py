@@ -62,7 +62,7 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
     # define correction factor C from paper as root 3d histogram
     C, Dm, Da, M, A = {}, {}, {}, {}, {}
     for s in ntuples:
-        print(s)
+        #print(s)
         C[s] = ROOT.TH3D(
             f"C_{s}", "",
             len(charge_bins)-1, array('f', charge_bins),
@@ -101,7 +101,7 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
                         phi+1,
                         mean_gen - mean
                     )
-                    print(mean_gen, mean)
+                    #print(mean_gen, mean)
                 Dm[s].SetBinContent(
                     eta+1,
                     phi+1,
