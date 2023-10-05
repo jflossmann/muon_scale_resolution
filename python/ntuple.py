@@ -184,7 +184,7 @@ def weight_zpt(ntuples, hdir):
     return
 
 
-
+# function which creates ntuple files from nanoaod
 def make_ntuples(nanoAODs, ntuples, pt_bins):
     for s in nanoAODs:
         quants = [
@@ -294,7 +294,7 @@ def yaml_loader(fname):
     return dsets
 
 
-
+# produces ntuples with all important quantities (also possible in rochester_rdf.py with parser arguments)
 if __name__=='__main__':
     pt_bins = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 140, 200]
     nanoAODs = {
