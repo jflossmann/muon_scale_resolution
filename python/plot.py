@@ -230,3 +230,49 @@ def plot_stuff(pdir, eta_bins, phi_bins):
         binsx = eta_bins,
         binsy = phi_bins 
     )
+    # median
+    plot_hists(
+        hfile='hists/oneOverPt.root',
+        hists={
+            'MC': "h_oneOverPt_MC_median_neg",
+            'DATA': "h_oneOverPt_DATA_median_neg"
+        },
+        outfile=f"{pdir}oneOverPt_median_neg",
+        dim=2,
+        binsx = eta_bins,
+        binsy = phi_bins 
+    )
+    plot_hists(
+        hfile='hists/oneOverPt.root',
+        hists={
+            'MC': "h_oneOverPt_MC_median_pos",
+            'DATA': "h_oneOverPt_DATA_median_pos"
+        },
+        outfile=f"{pdir}oneOverPt_median_pos",
+        dim=2,
+        binsx = eta_bins,
+        binsy = phi_bins
+    )
+    # peak
+    plot_hists(
+        hfile='hists/oneOverPt.root',
+        hists={
+            'MC': "h_oneOverPt_MC_peak_neg",
+            'DATA': "h_oneOverPt_DATA_peak_neg"
+        },
+        outfile=f"{pdir}oneOverPt_peak_neg",
+        dim=2,
+        binsx = eta_bins,
+        binsy = phi_bins 
+    )
+    plot_hists(
+        hfile='hists/oneOverPt.root',
+        hists={
+            'MC': "h_oneOverPt_MC_peak_pos",
+            'DATA': "h_oneOverPt_DATA_peak_pos"
+        },
+        outfile=f"{pdir}oneOverPt_peak_pos",
+        dim=2,
+        binsx = eta_bins,
+        binsy = phi_bins 
+    )
