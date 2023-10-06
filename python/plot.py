@@ -1,6 +1,6 @@
 import ROOT
 from array import array
-
+import os
 
 
 def plot_ratio(hists, title, outfile, text=['','',''], xrange=[50,130]):
@@ -15,29 +15,39 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=[50,130]):
     
     hists['mc'].SetStats(0)
     hists['mc'].SetTitle(title)
-    hists['mc'].SetLineWidth(2)
+    hists['mc'].SetMarkerStyle(ROOT.kFullCircle)
+    hists['mc'].SetMarkerSize(.8)
+    hists['mc'].SetMarkerColor(ROOT.kBlack)
 
     hists['mc'].GetXaxis().SetLabelSize(0)
     hists['mc'].GetXaxis().SetTitleSize(0)
     hists['mc'].GetXaxis().SetRangeUser(xrange[0], xrange[1])
 
-    hists['mc'].GetYaxis().SetRangeUser(0.0001, 1.2* max(hists['dt'].GetMaximum(), hists['mc'].GetMaximum()))
+    hists['mc'].GetYaxis().SetRangeUser(0.0001, 1.2* max(hists['dt'].GetMaximum(), hists['mc'].GetMaximum(), hists['gen'].GetMaximum()))
     hists['mc'].GetYaxis().SetTitle('a.u.')
     hists['mc'].GetYaxis().SetTitleSize(0.07)
     hists['mc'].GetYaxis().SetTitleOffset(0.7)
-    hists['mc'].Draw("hist")
-
+    hists['mc'].Draw("AP0")
 
     hists['dt'].SetMarkerStyle(ROOT.kFullCircle)
+    hists['dt'].SetMarkerColor(ROOT.kRed)
     hists['dt'].SetMarkerSize(.8)
     #hists['dt'].GetXaxis().SetRangeUser(xrange[0], xrange[1])
     hists['dt'].Draw("AP0 same")
-    ratio = hists['dt'].Clone()
+    ratio_data = hists['dt'].Clone()
+
+    hists['gen'].SetMarkerStyle(ROOT.kFullCircle)
+    hists['gen'].SetMarkerColor(ROOT.kGreen)
+    hists['gen'].SetMarkerSize(.8)
+    #hists['dt'].GetXaxis().SetRangeUser(xrange[0], xrange[1])
+    hists['gen'].Draw("AP0 same")
+    ratio_gen = hists['gen'].Clone()
 
 
     legend = ROOT.TLegend(0.12, 0.7, 0.3, 0.88)
-    legend.AddEntry(hists['mc'], 'DY #rightarrow #mu#mu')
-    legend.AddEntry(hists['dt'], 'Muon Data', "lep")
+    legend.AddEntry(hists['mc'], 'MC')
+    legend.AddEntry(hists['gen'], 'GEN')
+    legend.AddEntry(hists['dt'], 'Data')
     legend.SetBorderSize(0)
     legend.Draw('same')
 
@@ -67,27 +77,30 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=[50,130]):
     ratiopad.SetFillStyle(4000)
     ratiopad.SetBottomMargin(.25)
 
-    ratio.SetStats(0)
-    ratio.Divide(hists['mc'])
+    ratio_data.SetStats(0)
+    ratio_data.Divide(hists['mc'])
     #hists['dt'].SetMarkerStyle(20)
-    ratio.Draw("ep")
+    ratio_data.Draw("ep")
 
-    ratio.GetXaxis().SetLabelSize(0.09)
-    ratio.GetXaxis().SetTitleOffset(0.7)
-    ratio.GetXaxis().SetTitleSize(0.15)
-    ratio.GetXaxis().SetTickSize(0.07)
-    ratio.GetXaxis().SetTitle('m_#mu#mu (GeV)')
+    ratio_gen.Divide(hists['mc'])
+    ratio_gen.Draw("ep same")
 
-    ratio.GetYaxis().SetRangeUser(0.7,1.3)
-    ratio.GetYaxis().SetLabelSize(0.09)
-    ratio.GetYaxis().SetTitle("Data/MC")
-    ratio.GetYaxis().SetTickSize(0.03)
-    ratio.GetYaxis().SetTitleOffset(0.3)
-    ratio.GetYaxis().SetTitleSize(0.12)
-    ratio.SetTitle("")
+    ratio_data.GetXaxis().SetLabelSize(0.09)
+    ratio_data.GetXaxis().SetTitleOffset(0.7)
+    ratio_data.GetXaxis().SetTitleSize(0.15)
+    ratio_data.GetXaxis().SetTickSize(0.07)
+    ratio_data.GetXaxis().SetTitle('m_#mu#mu (GeV)')
 
-    xlim_hi = ratio.GetXaxis().GetXmax()
-    xlim_lo = ratio.GetXaxis().GetXmin()
+    ratio_data.GetYaxis().SetRangeUser(0.7,1.3)
+    ratio_data.GetYaxis().SetLabelSize(0.09)
+    ratio_data.GetYaxis().SetTitle("Data/MC")
+    ratio_data.GetYaxis().SetTickSize(0.03)
+    ratio_data.GetYaxis().SetTitleOffset(0.3)
+    ratio_data.GetYaxis().SetTitleSize(0.12)
+    ratio_data.SetTitle("")
+
+    xlim_hi = ratio_data.GetXaxis().GetXmax()
+    xlim_lo = ratio_data.GetXaxis().GetXmin()
     line = ROOT.TLine(xlim_lo, 1, xlim_hi, 1)
     line.SetLineWidth(2)
     line.Draw("same")
@@ -131,6 +144,12 @@ def hist_ntuples(
         h = rdf.Histo1D(h_info, var, 'zPtWeight')
         h.Scale(1./h.Integral())
         hists.append(h)
+
+        if s=='MC' and not 'cor' in var:
+            h_info=(var+"_GEN", var+" "+s, nbins, low, up)
+            h = rdf.Histo1D(h_info, 'gen'+var, 'zPtWeight')
+            h.Scale(1./h.Integral())
+            hists.append(h)
     
     tf = ROOT.TFile(f"{hdir}{fname}.root", option)
     for h in hists:
@@ -145,10 +164,12 @@ def plot_hists(hfile, hists, outfile, binsx=[], binsy=[], dim=1):
     h_dt = tf.Get(hists['DATA'])
 
     if dim==1:
+        h_gen = tf.Get(hists['GEN'])
         plot_ratio(
             hists = {
                 'mc': h_mc,
                 'dt': h_dt,
+                'gen': h_gen
             },
             title='',
             outfile=outfile
@@ -167,112 +188,60 @@ def plot_hists(hfile, hists, outfile, binsx=[], binsy=[], dim=1):
 
 def plot_stuff(pdir, eta_bins, phi_bins):
     # Z mass
-    plot_hists(
-        hfile='hists/mass_z.root',
-        hists={
-            'MC': "mass_Z_MC",
-            'DATA': "mass_Z_DATA"
-        },
-        outfile=f"{pdir}mass_z"
-    )
-    plot_hists(
-        hfile='hists/mass_z.root',
-        hists={
-            'MC': "mass_Z_roccor_MC",
-            'DATA': "mass_Z_roccor_DATA"
-        },
-        outfile=f"{pdir}mass_z_roccor"
-    )
+    os.makedirs(f'{pdir}mass_z/', exist_ok=True)
+    for corr in ['', '_mean_roccor', '_median_roccor', '_peak_roccor']:
+        plot_hists(
+            hfile='hists/mass_z.root',
+            hists={
+                'MC': f"mass_Z{corr}_MC",
+                'DATA': f"mass_Z{corr}_DATA",
+                'GEN': "mass_Z_GEN"
+            },
+            outfile=f"{pdir}mass_z/mass_z{corr}"
+        )
 
     # one over pT
-    plot_hists(
-        hfile='hists/oneOverPt.root',
-        hists={
+    hdict = {
+        'mean_neg': {
             'MC': "h_oneOverPt_MC_neg_pyx",
             'DATA': "h_oneOverPt_DATA_neg_pyx"
         },
-        outfile=f"{pdir}oneOverPt_neg",
-        dim=2,
-        binsx = eta_bins,
-        binsy = phi_bins 
-    )
-    plot_hists(
-        hfile='hists/oneOverPt.root',
-        hists={
+        'mean_pos': {
             'MC': "h_oneOverPt_MC_pos_pyx",
             'DATA': "h_oneOverPt_DATA_pos_pyx"
         },
-        outfile=f"{pdir}oneOverPt_pos",
-        dim=2,
-        binsx = eta_bins,
-        binsy = phi_bins 
-    )
-
-    plot_hists(
-        hfile='hists/oneOverPt_roccor.root',
-        hists={
-            'MC': "h_oneOverPt_MC_neg_roccor_pyx",
-            'DATA': "h_oneOverPt_DATA_neg_roccor_pyx"
-        },
-        outfile=f"{pdir}oneOverPt_neg_roccor",
-        dim=2,
-        binsx = eta_bins,
-        binsy = phi_bins 
-    )
-    plot_hists(
-        hfile='hists/oneOverPt_roccor.root',
-        hists={
-            'MC': "h_oneOverPt_MC_pos_roccor_pyx",
-            'DATA': "h_oneOverPt_DATA_pos_roccor_pyx"
-        },
-        outfile=f"{pdir}oneOverPt_pos_roccor",
-        dim=2,
-        binsx = eta_bins,
-        binsy = phi_bins 
-    )
-    # median
-    plot_hists(
-        hfile='hists/oneOverPt.root',
-        hists={
+        'median_neg': {
             'MC': "h_oneOverPt_MC_median_neg",
             'DATA': "h_oneOverPt_DATA_median_neg"
         },
-        outfile=f"{pdir}oneOverPt_median_neg",
-        dim=2,
-        binsx = eta_bins,
-        binsy = phi_bins 
-    )
-    plot_hists(
-        hfile='hists/oneOverPt.root',
-        hists={
+        'median_pos': {
             'MC': "h_oneOverPt_MC_median_pos",
             'DATA': "h_oneOverPt_DATA_median_pos"
         },
-        outfile=f"{pdir}oneOverPt_median_pos",
-        dim=2,
-        binsx = eta_bins,
-        binsy = phi_bins
-    )
-    # peak
-    plot_hists(
-        hfile='hists/oneOverPt.root',
-        hists={
+        'peak_neg': {
             'MC': "h_oneOverPt_MC_peak_neg",
             'DATA': "h_oneOverPt_DATA_peak_neg"
         },
-        outfile=f"{pdir}oneOverPt_peak_neg",
-        dim=2,
-        binsx = eta_bins,
-        binsy = phi_bins 
-    )
-    plot_hists(
-        hfile='hists/oneOverPt.root',
-        hists={
+        'peak_pos': {
             'MC': "h_oneOverPt_MC_peak_pos",
             'DATA': "h_oneOverPt_DATA_peak_pos"
         },
-        outfile=f"{pdir}oneOverPt_peak_pos",
-        dim=2,
-        binsx = eta_bins,
-        binsy = phi_bins 
-    )
+    }
+    os.makedirs(f'{pdir}oneOverPt/', exist_ok=True)
+    for h in hdict:
+        plot_hists(
+            hfile='hists/oneOverPt.root',
+            hists=hdict[h],
+            outfile=f"{pdir}oneOverPt/oneOverPt_{h}",
+            dim=2,
+            binsx = eta_bins,
+            binsy = phi_bins 
+        )
+        plot_hists(
+            hfile='hists/oneOverPt_peak_roccor.root',
+            hists=hdict[h],
+            outfile=f"{pdir}oneOverPt/oneOverPt_{h}_peak_roccor",
+            dim=2,
+            binsx = eta_bins,
+            binsy = phi_bins 
+        )
