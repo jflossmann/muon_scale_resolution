@@ -1,46 +1,131 @@
 import ROOT
 from array import array
+from tqdm import tqdm
+from multiprocessing import Pool, RLock
+import os
 
-def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir):
-    # ROOT.gROOT.ProcessLine('tf->Close()')
+modes = ['mean', 'median', 'peak']
+
+
+def fit_oneOverpT(hist, plot, e, p):
+    ROOT.RooMsgService.instance().setSilentMode(True)
+    ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
+    ROOT.gROOT.SetBatch(1)
+
+    x = ROOT.RooRealVar("x", "oneOverPt (1/GeV)", 1/200, 1/20)
+    x.setBins(10000,"cache")
+    x.setMin("cache",0)
+    x.setMax("cache",500)
+
+    c1 = ROOT.TCanvas( 'c1', 'The Fit Canvas', 200, 10, 700, 500 )
+    c1.SetGridx()
+    c1.SetGridy()
+    c1.GetFrame().SetFillColor( 21 )
+    c1.GetFrame().SetBorderMode(-1 )
+    c1.GetFrame().SetBorderSize( 5 )
+    frame = x.frame()
+    frame.SetTitle('')
+
+    mean = ROOT.RooRealVar("mean", "mean", 0, 1/50, 1./40)
+    #cb_mean.setConstant(True)
+    sigma_L = ROOT.RooRealVar("sigma_L", "sigma", 0.0007, 0, 0.001)
+    sigma_R = ROOT.RooRealVar("sigma_R", "sigma", 0.001, 0, 0.001)
+    n_sigma = 1 # since sigma_total = sigma_left + sigma_right
+    n_L = ROOT.RooRealVar("n_L", "n_L", 5, 0, 1000)
+    n_R = ROOT.RooRealVar("n_R", "n_R", 5, 0, 1000)
+    alpha_L = ROOT.RooRealVar("alpha_L", "alpha_L", 0.3, 0, 2)
+    alpha_R = ROOT.RooRealVar("alpha_R", "alpha_R", 0.3, 0, 2)
+
+    func =  ROOT.RooCrystalBall("cb", "CrystalBall", x, mean, sigma_L,
+                            sigma_R, alpha_L, n_L, alpha_R, n_R)
+
+    roohist = ROOT.RooDataHist('h', '', ROOT.RooArgSet(x), hist)
+    fitResult = func.fitTo(roohist, ROOT.RooFit.AsymptoticError(True), ROOT.RooFit.PrintEvalErrors(-1))
+
+    roohist.plotOn(frame, ROOT.RooFit.DrawOption("B"), ROOT.RooFit.FillStyle(0), ROOT.RooFit.FillColor(ROOT.kBlue))
+    func.plotOn(frame, ROOT.RooFit.LineColor(ROOT.kBlue))
+
+    frame.Draw()
+    c1.Update()
+    ROOT.gStyle.SetGridColor(ROOT.kGray+1)
+    c1.SaveAs("{}.png".format(plot))
+    c1.SaveAs("{}.pdf".format(plot))
+
+    print(sigma_L.getVal(), sigma_R.getVal())
+
+    return mean.getVal(), e, p
+    
+
+def job_wrapper(args):
+    return fit_oneOverpT(*args)
+
+
+def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr=''):
+    os.makedirs(pdir+'fits/', exist_ok=True)
     hists = []
     ntuples_tmp = dict(ntuples)
     ntuples_tmp["GEN"] = ntuples_tmp["MC"]
+    negpos = ["neg", "pos"]
     for s in ntuples_tmp:
+        os.makedirs(pdir+f'fits/{s+corr}/', exist_ok=True)
         gen = ""
+        roccor = corr
         if s == "GEN":
             gen = "gen"
+            roccor = ''
 
         rdf = ROOT.RDataFrame("Events", ntuples_tmp[s])
-        rdf = rdf.Define("oneOverPt_1", f"1./{gen}pt_1")
-        rdf = rdf.Define("oneOverPt_2", f"1./{gen}pt_2")
-        h_neg = rdf.Histo3D(
-            (
-                f"h_oneOverPt_{s}_neg", "", 
-                len(eta_bins)-1, array('f', eta_bins), 
-                len(phi_bins)-1, array('f', phi_bins), 
-                len(oneOverPt_bins)-1, array('f', oneOverPt_bins)
-            ),
-            f"{gen}eta_1",
-            f"{gen}phi_1",
-            "oneOverPt_1",
-            "zPtWeight" # TODO: improve method. averaging over bins not precise enough
-        )
-        hists += [h_neg, h_neg.Project3DProfile("yx")]
-        h_pos = rdf.Histo3D(
-            (
-                f"h_oneOverPt_{s}_pos", "",
-                len(eta_bins)-1, array('f', eta_bins), 
-                len(phi_bins)-1, array('f', phi_bins), 
-                len(oneOverPt_bins)-1, array('f', oneOverPt_bins)
-            ),
-            f"{gen}eta_2",
-            f"{gen}phi_2",
-            "oneOverPt_2",
-            "zPtWeight"
-        )
-        hists += [h_pos, h_pos.Project3DProfile("yx")]
-    tf = ROOT.TFile(f"{hdir}oneOverPt.root","RECREATE")
+
+        for np in range(2):
+
+            rdf = rdf.Define(f"oneOverPt_{np+1}", f"1./{gen}pt_{np+1}{roccor}")
+            h_3d = rdf.Histo3D(
+                (
+                    f"h_oneOverPt_{s}_{negpos[np]}", "", 
+                    len(eta_bins)-1, array('f', eta_bins), 
+                    len(phi_bins)-1, array('f', phi_bins), 
+                    len(oneOverPt_bins)-1, array('f', oneOverPt_bins)
+                ),
+                f"{gen}eta_{np+1}",
+                f"{gen}phi_{np+1}",
+                f"oneOverPt_{np+1}",
+                "zPtWeight" # TODO: improve method. averaging over bins not precise enough
+            )
+
+            h_median = ROOT.TH2D(
+                f"h_oneOverPt_{s}_median_{negpos[np]}", "",
+                len(eta_bins)-1, array('d', eta_bins), 
+                len(phi_bins)-1, array('d', phi_bins)
+            )
+
+            h_peak = ROOT.TH2D(
+                f"h_oneOverPt_{s}_peak_{negpos[np]}", "",
+                len(eta_bins)-1, array('d', eta_bins), 
+                len(phi_bins)-1, array('d', phi_bins)
+            )
+
+            quantile = array('d', [0.5])
+            median = array('d', [0])
+
+            arguments = []
+            for e in range(len(eta_bins)-1):
+                for p in range(len(phi_bins)-1):
+                    h_ep = h_3d.ProjectionZ(f"h_tmp_{e}_{p}", e+1, e+1, p+1, p+1)
+
+                    arguments.append((h_ep, f'{pdir}fits/{s+corr}/{e}_{p}', e, p))
+
+                    h_ep.GetQuantiles(1, median, quantile)
+                    h_median.SetBinContent(e+1, p+1, median[0])
+
+            pool = Pool(8, initargs=(RLock(),), initializer=tqdm.set_lock)
+            for results in tqdm(pool.imap_unordered(job_wrapper, arguments)):
+                fit, e, p = results            
+                h_peak.SetBinContent(e+1, p+1, fit)
+                h_peak.SetBinError(e+1, p+1, fit)
+
+            hists += [h_3d, h_3d.Project3DProfile("yx"), h_median, h_peak]
+
+    tf = ROOT.TFile(f"{hdir}oneOverPt{corr}.root","RECREATE")
     for h in hists:
         h.Write()
     tf.Close()
@@ -57,91 +142,97 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
         for np in negpos:
             oneOverPt_hists[f"{s}_mean_{np}"] = tf.Get(f'h_oneOverPt_{s}_{np}_pyx')
             oneOverPt_hists[f"{s}_mean_{np}"].SetDirectory(ROOT.nullptr)
+            oneOverPt_hists[f"{s}_median_{np}"] = tf.Get(f'h_oneOverPt_{s}_median_{np}')
+            oneOverPt_hists[f"{s}_median_{np}"].SetDirectory(ROOT.nullptr)
+            oneOverPt_hists[f"{s}_peak_{np}"] = tf.Get(f'h_oneOverPt_{s}_peak_{np}')
+            oneOverPt_hists[f"{s}_peak_{np}"].SetDirectory(ROOT.nullptr)
     tf.Close()
 
     # define correction factor C from paper as root 3d histogram
     C, Dm, Da, M, A = {}, {}, {}, {}, {}
-    for s in ntuples:
-        #print(s)
-        C[s] = ROOT.TH3D(
-            f"C_{s}", "",
-            len(charge_bins)-1, array('f', charge_bins),
-            len(eta_bins)-1, array('f', eta_bins),
-            len(phi_bins)-1, array('f', phi_bins)
-        )
-        Dm[s] = ROOT.TH2D(
-            f"Dm_{s}", "",
-            len(eta_bins)-1, array('f', eta_bins),
-            len(phi_bins)-1, array('f', phi_bins)
-        )
-        Da[s] = ROOT.TH2D(
-            f"Da_{s}", "",
-            len(eta_bins)-1, array('f', eta_bins),
-            len(phi_bins)-1, array('f', phi_bins)
-        )
-        M[s] = ROOT.TH2D(
-            f"M_{s}", "",
-            len(eta_bins)-1, array('f', eta_bins),
-            len(phi_bins)-1, array('f', phi_bins)
-        )
-        A[s] = ROOT.TH2D(
-            f"A_{s}", "",
-            len(eta_bins)-1, array('f', eta_bins),
-            len(phi_bins)-1, array('f', phi_bins)
-        )
+    for mode in modes:
+        for s in ntuples:
+            #print(s)
+            C[mode+s] = ROOT.TH3D(
+                f"C_{mode}_{s}", "",
+                len(charge_bins)-1, array('f', charge_bins),
+                len(eta_bins)-1, array('f', eta_bins),
+                len(phi_bins)-1, array('f', phi_bins)
+            )
+            Dm[mode+s] = ROOT.TH2D(
+                f"Dm_{mode}_{s}", "",
+                len(eta_bins)-1, array('f', eta_bins),
+                len(phi_bins)-1, array('f', phi_bins)
+            )
+            Da[mode+s] = ROOT.TH2D(
+                f"Da_{mode}_{s}", "",
+                len(eta_bins)-1, array('f', eta_bins),
+                len(phi_bins)-1, array('f', phi_bins)
+            )
+            M[mode+s] = ROOT.TH2D(
+                f"M_{mode}_{s}", "",
+                len(eta_bins)-1, array('f', eta_bins),
+                len(phi_bins)-1, array('f', phi_bins)
+            )
+            A[mode+s] = ROOT.TH2D(
+                f"A_{mode}_{s}", "",
+                len(eta_bins)-1, array('f', eta_bins),
+                len(phi_bins)-1, array('f', phi_bins)
+            )
 
-        for eta in range(len(eta_bins)-1):
-            for phi in range(len(phi_bins)-1):
-                for charge in range(len(charge_bins)-1):
-                    mean_gen = oneOverPt_hists[f"GEN_mean_{negpos[charge]}"].GetBinContent(eta+1, phi+1)
-                    mean = oneOverPt_hists[f"{s}_mean_{negpos[charge]}"].GetBinContent(eta+1, phi+1)
-                    C[s].SetBinContent(
-                        charge+1,
+            for eta in range(len(eta_bins)-1):
+                for phi in range(len(phi_bins)-1):
+                    for charge in range(len(charge_bins)-1):
+                        mean_gen = oneOverPt_hists[f"GEN_{mode}_{negpos[charge]}"].GetBinContent(eta+1, phi+1)
+                        mean = oneOverPt_hists[f"{s}_{mode}_{negpos[charge]}"].GetBinContent(eta+1, phi+1)
+                        C[mode+s].SetBinContent(
+                            charge+1,
+                            eta+1,
+                            phi+1,
+                            mean_gen - mean
+                        )
+                        #print(mean_gen, mean)
+                    Dm[mode+s].SetBinContent(
                         eta+1,
                         phi+1,
-                        mean_gen - mean
+                        (C[mode+s].GetBinContent(2, eta+1, phi+1) + C[mode+s].GetBinContent(1, eta+1, phi+1)) / 2.
                     )
-                    #print(mean_gen, mean)
-                Dm[s].SetBinContent(
-                    eta+1,
-                    phi+1,
-                    (C[s].GetBinContent(2, eta+1, phi+1) + C[s].GetBinContent(1, eta+1, phi+1)) / 2.
-                )
-                Da[s].SetBinContent(
-                    eta+1,
-                    phi+1,
-                    (C[s].GetBinContent(2, eta+1, phi+1) - C[s].GetBinContent(1, eta+1, phi+1)) / 2.
-                )
-                M[s].SetBinContent(
-                    eta+1,
-                    phi+1,
-                    1 + 2*Dm[s].GetBinContent(eta+1, phi+1) / (
-                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(eta+1, phi+1) + 
-                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(eta+1, phi+1)
+                    Da[mode+s].SetBinContent(
+                        eta+1,
+                        phi+1,
+                        (C[mode+s].GetBinContent(2, eta+1, phi+1) - C[mode+s].GetBinContent(1, eta+1, phi+1)) / 2.
                     )
-                )
+                    M[mode+s].SetBinContent(
+                        eta+1,
+                        phi+1,
+                        1 + 2*Dm[mode+s].GetBinContent(eta+1, phi+1) / (
+                            oneOverPt_hists[f"{s}_{mode}_{negpos[0]}"].GetBinContent(eta+1, phi+1) + 
+                            oneOverPt_hists[f"{s}_{mode}_{negpos[1]}"].GetBinContent(eta+1, phi+1)
+                        )
+                    )
 
-                A[s].SetBinContent(
-                    eta+1,
-                    phi+1,
-                    Da[s].GetBinContent(eta+1, phi+1) - (
-                        Dm[s].GetBinContent(eta+1, phi+1)*(
-                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(eta+1, phi+1) -
-                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(eta+1, phi+1)
-                    ) / (
-                        oneOverPt_hists[f"{s}_mean_{negpos[0]}"].GetBinContent(eta+1, phi+1) +
-                        oneOverPt_hists[f"{s}_mean_{negpos[1]}"].GetBinContent(eta+1, phi+1)
+                    A[mode+s].SetBinContent(
+                        eta+1,
+                        phi+1,
+                        Da[mode+s].GetBinContent(eta+1, phi+1) - (
+                            Dm[mode+s].GetBinContent(eta+1, phi+1)*(
+                            oneOverPt_hists[f"{s}_{mode}_{negpos[0]}"].GetBinContent(eta+1, phi+1) -
+                            oneOverPt_hists[f"{s}_{mode}_{negpos[1]}"].GetBinContent(eta+1, phi+1)
+                        ) / (
+                            oneOverPt_hists[f"{s}_{mode}_{negpos[0]}"].GetBinContent(eta+1, phi+1) +
+                            oneOverPt_hists[f"{s}_{mode}_{negpos[1]}"].GetBinContent(eta+1, phi+1)
+                        )
+                        )
                     )
-                    )
-                )
 
     tf = ROOT.TFile(f"{hdir}C.root", "RECREATE")
-    for s in ntuples:
-        C[s].Write()
-        Dm[s].Write()
-        Da[s].Write()
-        M[s].Write()
-        A[s].Write()
+    for mode in modes:
+        for s in ntuples:
+            C[mode+s].Write()
+            Dm[mode+s].Write()
+            Da[mode+s].Write()
+            M[mode+s].Write()
+            A[mode+s].Write()
     tf.Close()
 
 
@@ -149,77 +240,40 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
 def apply_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
     
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}C.root", "READ");')
-    ROOT.gROOT.ProcessLine('TH2D* M_DATA = (TH2D*)tf->Get("M_DATA");')
-    ROOT.gROOT.ProcessLine('TH2D* M_MC = (TH2D*)tf->Get("M_MC");')
-    ROOT.gROOT.ProcessLine('TH2D* A_DATA = (TH2D*)tf->Get("A_DATA");')
-    ROOT.gROOT.ProcessLine('TH2D* A_MC = (TH2D*)tf->Get("A_MC");')   
+    for mode in modes:
+        ROOT.gROOT.ProcessLine(f'TH2D* M_{mode}_DATA = (TH2D*)tf->Get("M_{mode}_DATA");')
+        ROOT.gROOT.ProcessLine(f'TH2D* M_{mode}_MC = (TH2D*)tf->Get("M_{mode}_MC");')
+        ROOT.gROOT.ProcessLine(f'TH2D* A_{mode}_DATA = (TH2D*)tf->Get("A_{mode}_DATA");')
+        ROOT.gROOT.ProcessLine(f'TH2D* A_{mode}_MC = (TH2D*)tf->Get("A_{mode}_MC");')   
     
     for s in ntuples:
         rdf = ROOT.RDataFrame("Events", ntuples[s])
-        rdf = rdf.Define("oneOverPt_1", "1./pt_1")
-        rdf = rdf.Define(
-            "oneOverPt_1_roccor",
-            f"""oneOverPt_1 * M_{s}->GetBinContent(M_{s}->FindBin(eta_1, phi_1)) + 
-            charge_1 * A_{s}->GetBinContent(A_{s}->FindBin(eta_1, phi_1))
-            """
-        )
-        rdf = rdf.Define("pt_1_roccor", "1./oneOverPt_1_roccor")
-        rdf = rdf.Define("oneOverPt_2", "1./pt_2")
-        rdf = rdf.Define(
-            "oneOverPt_2_roccor",
-            f"""oneOverPt_2 * M_{s}->GetBinContent(M_{s}->FindBin(eta_2, phi_2)) + 
-            charge_2 * A_{s}->GetBinContent(A_{s}->FindBin(eta_2, phi_2))
-            """
-        )
-        rdf = rdf.Define("pt_2_roccor", "1./oneOverPt_2_roccor")
-
         quants = list(rdf.GetColumnNames())
+        rdf = rdf.Define("oneOverPt_1", "1./pt_1")
+        rdf = rdf.Define("oneOverPt_2", "1./pt_2")
+
+        for mode in modes:
+            rdf = rdf.Define(
+                f"oneOverPt_1_{mode}_roccor",
+                f"""oneOverPt_1 * M_{mode}_{s}->GetBinContent(M_{mode}_{s}->FindBin(eta_1, phi_1)) + 
+                charge_1 * A_{mode}_{s}->GetBinContent(A_{mode}_{s}->FindBin(eta_1, phi_1))
+                """
+            )
+            rdf = rdf.Define(f"pt_1_{mode}_roccor", f"1./oneOverPt_1_{mode}_roccor")
+            rdf = rdf.Define(
+                f"oneOverPt_2_{mode}_roccor",
+                f"""oneOverPt_2 * M_{mode}_{s}->GetBinContent(M_{mode}_{s}->FindBin(eta_2, phi_2)) + 
+                charge_2 * A_{mode}_{s}->GetBinContent(A_{mode}_{s}->FindBin(eta_2, phi_2))
+                """
+            )
+            rdf = rdf.Define(f"pt_2_{mode}_roccor", f"1./oneOverPt_2_{mode}_roccor")
+
+            
+            rdf = rdf.Define(f"p4_1_{mode}", f"ROOT::Math::PtEtaPhiMVector(pt_1_{mode}_roccor, eta_1, phi_1, mass_1)")
+            rdf = rdf.Define(f"p4_2_{mode}", f"ROOT::Math::PtEtaPhiMVector(pt_2_{mode}_roccor, eta_2, phi_2, mass_2)")
+            rdf = rdf.Define(f"p4_Z_{mode}", f"p4_1_{mode} + p4_2_{mode}")
+            rdf = rdf.Define(f"mass_Z_{mode}_roccor", f"p4_Z_{mode}.M()")
+
+            quants += [f"pt_1_{mode}_roccor", f"pt_2_{mode}_roccor", f"mass_Z_{mode}_roccor"]
         
-        rdf = rdf.Define("p4_1", "ROOT::Math::PtEtaPhiMVector(pt_1_roccor, eta_1, phi_1, mass_1)")
-        rdf = rdf.Define("p4_2", "ROOT::Math::PtEtaPhiMVector(pt_2_roccor, eta_2, phi_2, mass_2)")
-        rdf = rdf.Define("p4_Z", "p4_1 + p4_2")
-        rdf = rdf.Define("mass_Z_roccor", "p4_Z.M()")
-        
-        rdf.Snapshot("Events", ntuples[s].replace('.root', '_corr.root'), quants + ["mass_Z_roccor"])
-
-
-
-
-def scale_closure(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir):
-    hists = []
-    for s in ntuples:
-        rdf = ROOT.RDataFrame("Events", ntuples[s].replace('.root', '_corr.root'))
-        h_neg = rdf.Histo3D(
-            (
-                f"h_oneOverPt_{s}_neg_roccor", "", 
-                len(eta_bins)-1, array('f', eta_bins), 
-                len(phi_bins)-1, array('f', phi_bins), 
-                len(oneOverPt_bins)-1, array('f', oneOverPt_bins)
-            ),
-            f"eta_1",
-            f"phi_1",
-            "oneOverPt_1_roccor",
-            "zPtWeight" # TODO: improve method. averaging over bins not precise enough
-        )
-
-        hists += [h_neg, h_neg.Project3DProfile("yx")]
-
-        h_pos = rdf.Histo3D(
-            (
-                f"h_oneOverPt_{s}_pos_roccor", "",
-                len(eta_bins)-1, array('f', eta_bins), 
-                len(phi_bins)-1, array('f', phi_bins), 
-                len(oneOverPt_bins)-1, array('f', oneOverPt_bins)
-            ),
-            f"eta_2",
-            f"phi_2",
-            "oneOverPt_2_roccor",
-            "zPtWeight"
-        )
-
-        hists += [h_pos, h_pos.Project3DProfile("yx")]
-
-    tf = ROOT.TFile(f"{hdir}oneOverPt_roccor.root","RECREATE")
-    for h in hists:
-        h.Write()
-    tf.Close()
+        rdf.Snapshot("Events", ntuples[s].replace('.root', '_corr.root'), quants)
