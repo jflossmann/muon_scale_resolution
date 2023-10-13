@@ -65,6 +65,7 @@ if __name__=='__main__':
     
     datadir = "/ceph/jdriesch/rochester/"
     nanoAODs = ntuple.yaml_loader('configs/nanoAODs.yaml')
+    datasets = ntuple.yaml_loader('configs/datasets.yaml')
     ntuples = {
         'DATA': f"{datadir}DATA_ntuples.root",
         'MC': f"{datadir}MC_ntuples.root",
@@ -79,7 +80,7 @@ if __name__=='__main__':
     args = parse_args()
 
     if args.ntuples:
-        ntuple.make_ntuples(nanoAODs, ntuples, pt_bins)
+        ntuple.make_ntuples(nanoAODs, datasets, ntuples, pt_bins)
         os.makedirs(hdir, exist_ok=True)
         ntuple.hist_zpt(ntuples, pt_bins, hdir)
         ntuple.weight_zpt(ntuples, hdir)

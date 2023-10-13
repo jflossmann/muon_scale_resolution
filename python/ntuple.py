@@ -186,7 +186,7 @@ def weight_zpt(ntuples, hdir):
 
 
 # function which creates ntuple files from nanoaod
-def make_ntuples(nanoAODs, ntuples, pt_bins):
+def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
     for s in nanoAODs:
         quants = [
             "pt_Z", "mass_Z", "eta_Z", "phi_Z",
@@ -195,6 +195,7 @@ def make_ntuples(nanoAODs, ntuples, pt_bins):
         ]
         # load nanoAOD
         rdf = ROOT.RDataFrame("Events", nanoAODs[s])
+        n_tot = rdf.Count().GetValue()
         
         # only collect events w/ >1 muon and find muon pair closest to z mass. Muon1 is always charge -1 and muon2 always +1
         rdf = rdf.Filter("Muon_pt.size() > 1")
@@ -232,8 +233,13 @@ def make_ntuples(nanoAODs, ntuples, pt_bins):
         rdf = rdf.Define("phi_Z", "p4_Z.Phi()")
         
         rdf = rdf.Filter("mass_Z > 50 && mass_Z < 130")
+
+        n_filt = rdf.Count().GetValue()
+
+        rdf = rdf.Define("acceptance", str(n_filt/n_tot))
+        rdf = rdf.Define("xsec", str(datasets[s]['xsec']))
         
-        if s=="MC":
+        if s!="DATA":
             # perform gen delta R matching and collect corresponding events and gen quantities
             rdf = rdf.Define("genind_1", """muon_genmatch(
                                                 eta_1,
@@ -279,7 +285,8 @@ def make_ntuples(nanoAODs, ntuples, pt_bins):
             quants += [
                 "genpt_1", "genmass_1", "geneta_1", "genphi_1", "gencharge_1",
                 "genpt_2", "genmass_2", "geneta_2", "genphi_2", "gencharge_2",
-                "genpt_Z", "genmass_Z", "geneta_Z", "genphi_Z"
+                "genpt_Z", "genmass_Z", "geneta_Z", "genphi_Z",
+                "Pileup_nPU"
             ]
 
         # make output with interesting data
