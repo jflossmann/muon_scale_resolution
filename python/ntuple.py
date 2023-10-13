@@ -26,6 +26,7 @@ ROOT.gInterpreter.Declare("""
 
             for(int j=i; j<nMuon; j++){
                 if (Muon_pt->at(j) < 10) continue;
+                if (Muon_pt->at(j) < 25 && Muon_pt->at(j) < 25) continue;
                 if(fabs(Muon_eta->at(j) > 2.4)) continue;
                 if(Muon_tkRelIso->at(j) > 0.1) continue;
                 if(Muon_mediumId->at(j)==0) continue;
