@@ -3,9 +3,8 @@ from array import array
 import os
 
 
-def plot_ratio(hists, title, outfile, text=['','',''], xrange=[50,130]):
+def plot_ratio(hists, title, outfile, text=['','','']):
     ROOT.gROOT.SetBatch(1)
-    hists['mc'].Scale(hists['dt'].Integral()/hists['mc'].Integral())
 
     c = ROOT.TCanvas("c", title, 900, 800)
     c.Divide(1,2)
@@ -21,9 +20,8 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=[50,130]):
 
     hists['mc'].GetXaxis().SetLabelSize(0)
     hists['mc'].GetXaxis().SetTitleSize(0)
-    hists['mc'].GetXaxis().SetRangeUser(xrange[0], xrange[1])
-
-    hists['mc'].GetYaxis().SetRangeUser(0.0001, 1.2* max(hists['dt'].GetMaximum(), hists['mc'].GetMaximum(), hists['gen'].GetMaximum()))
+    
+    hists['mc'].GetYaxis().SetRangeUser(0., 1.2* max(hists['dt'].GetMaximum(), hists['mc'].GetMaximum(), hists['gen'].GetMaximum()))
     hists['mc'].GetYaxis().SetTitle('a.u.')
     hists['mc'].GetYaxis().SetTitleSize(0.07)
     hists['mc'].GetYaxis().SetTitleOffset(0.7)
@@ -32,14 +30,12 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=[50,130]):
     hists['dt'].SetMarkerStyle(ROOT.kFullCircle)
     hists['dt'].SetMarkerColor(ROOT.kRed)
     hists['dt'].SetMarkerSize(.8)
-    #hists['dt'].GetXaxis().SetRangeUser(xrange[0], xrange[1])
     hists['dt'].Draw("AP0 same")
     ratio_data = hists['dt'].Clone()
 
     hists['gen'].SetMarkerStyle(ROOT.kFullCircle)
     hists['gen'].SetMarkerColor(ROOT.kGreen)
     hists['gen'].SetMarkerSize(.8)
-    #hists['dt'].GetXaxis().SetRangeUser(xrange[0], xrange[1])
     hists['gen'].Draw("AP0 same")
     ratio_gen = hists['gen'].Clone()
 
