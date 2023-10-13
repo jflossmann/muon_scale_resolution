@@ -5,11 +5,41 @@
     configs/jsons/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt
   "type":
     data
-
-"MC":
+  "xsec":
+    1.0
+"DY":
   "names":
     - /DYJetsToLL_M-50_TuneCP5_13TeV-madgraphMLM-pythia8/RunIISummer20UL18NanoAODv2-106X_upgrade2018_realistic_v15_L1v1-v1/NANOAODSIM
   "gjson":
     dummy
   "type":
     mc
+  "xsec":
+    5931.9
+"WW":
+  "names":
+    - /WW_TuneCP5_13TeV-pythia8/RunIISummer20UL18NanoAODv2-106X_upgrade2018_realistic_v15_L1v1-v1/NANOAODSIM
+  "gjson":
+    dummy
+  "type":
+    mc
+  "xsec":
+    118.7
+"WZ":
+  "names":
+    - /WZ_TuneCP5_13TeV-pythia8/RunIISummer20UL18NanoAODv2-106X_upgrade2018_realistic_v15_L1v1-v1/NANOAODSIM
+  "gjson":
+    dummy
+  "type":
+    mc
+  "xsec":
+    47.1
+"ZZ":
+  "names":
+    - /ZZ_TuneCP5_13TeV-pythia8/RunIISummer20UL18NanoAODv2-106X_upgrade2018_realistic_v15_L1v1-v1/NANOAODSIM
+  "gjson":
+    dummy
+  "type":
+    mc
+  "xsec":
+    16.5
