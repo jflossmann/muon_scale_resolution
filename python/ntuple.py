@@ -175,9 +175,9 @@ def weight_zpt(ntuples, hdir):
     for s in ["GEN"] + list(ntuples.keys()):
         rdf = ROOT.RDataFrame("Events", ntuples[s])
         if s== "DATA":
-            rdf = rdf.Redefine("zPtWeight", "1")
+            rdf = rdf.Define("zPtWeight", "1")
         else:
-            rdf = rdf.Redefine("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
+            rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
             
         quants = list(rdf.GetColumnNames())
         rdf.Snapshot("Events", ntuples[s], quants)
