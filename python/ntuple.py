@@ -187,17 +187,26 @@ def weight_zpt(ntuples, hdir):
 
 # function which creates ntuple files from nanoaod
 def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
-    for s in list(nanoAODs.keys())[:-1]:
+    for s in list(nanoAODs.keys())[1:-1]:
         start = time.time()
         print(f"Processing {s} samples. Number of Files: {len(nanoAODs[s])}")
         quants = [
             "pt_Z", "mass_Z", "eta_Z", "phi_Z",
             "pt_1", "mass_1", "eta_1", "phi_1", "charge_1",
-            "pt_2", "mass_2", "eta_2", "phi_2", "charge_2"
+            "pt_2", "mass_2", "eta_2", "phi_2", "charge_2",
+            "genWeight", "sumwWeight", "xsec"
         ]
         # load nanoAOD
         rdf = ROOT.RDataFrame("Events", nanoAODs[s])
         n_tot = rdf.Count().GetValue()
+
+        if s=='DATA':
+            rdf = rdf.Define("genWeight", "1")
+        #else:
+            #rdf = rdf.Define("genWeight", "Generator_weight")
+
+        genweight = rdf.Sum("genWeight").GetValue()
+        rdf = rdf.Define("sumwWeight", f"1./{genweight}")
         
         # only collect events w/ >1 muon and find muon pair closest to z mass. Muon1 is always charge -1 and muon2 always +1
         rdf = rdf.Filter("Muon_pt.size() > 1")
@@ -236,9 +245,6 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
         
         rdf = rdf.Filter("mass_Z > 50 && mass_Z < 130")
 
-        n_filt = rdf.Count().GetValue()
-
-        rdf = rdf.Define("acceptance", str(n_filt/n_tot))
         rdf = rdf.Define("xsec", str(datasets[s]['xsec']))
 
         # make output with interesting data
@@ -313,3 +319,10 @@ def yaml_loader(fname):
         dsets = yaml.load(f, Loader=yaml.Loader)
     #print(dsets)
     return dsets
+
+
+def load_hist(path, sf):
+    tf = ROOT.TFile(path, "read")
+    h_sf = tf.Get(sf)
+    h_sf.SetDirectory(ROOT.nullptr)
+    return h_sf
