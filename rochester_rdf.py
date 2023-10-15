@@ -127,7 +127,7 @@ if __name__=='__main__':
         os.makedirs(pdir, exist_ok=True)
         plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "RECREATE")
         for corr in ['_mean_roccor', '_median_roccor']:
-            plot.hist_ntuples(ntuples_corr, "mass_Z"+corr, len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z")
+            plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "update", corr)
         plot.plot_stuff(pdir, eta_bins, phi_bins)
         
     if args.zmass:

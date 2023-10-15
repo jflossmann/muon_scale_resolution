@@ -10,7 +10,6 @@ modes = ['mean', 'median']
 def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='')->None:
     """create histograms for inverse transversal momentum from ntuple data"""
     
-    os.makedirs(pdir+'fits/', exist_ok=True)
     hists = {}
     hists["tosave"] = []
     negpos = ["neg", "pos"]
@@ -51,7 +50,8 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
         for np in range(2):
             h_sum = hists[typ+str(np)][0].Clone(f"h_oneOverPt_{typ}_{negpos[np]}")
             for i in range(len(hists[typ+str(np)])-1):
-                h_sum.Add(hists[typ+str(np)][i+1])
+                h_tmp = hists[typ+str(np)][i+1].Clone("h_tmp")
+                h_sum.Add(h_tmp)
 
             #create histogram for median
             h_median = ROOT.TH2D(

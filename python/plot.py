@@ -130,25 +130,33 @@ def plot_2d_ratio(hists, outfile, binsx, binsy):
 def hist_ntuples(
     ntuples,
     var, nbins, low, up, 
-    hdir, fname, option="update"
+    hdir, fname, option="update", corr=''
     ):  
     #make histogram of any variable in ntuple (e.g. "mass_Z" )
-    hists=[]
-    for s in ntuples:
-        rdf = ROOT.RDataFrame("Events", ntuples[s])
-        h_info=(var+"_"+s, var+" "+s, nbins, low, up)
-        h = rdf.Histo1D(h_info, var, 'zPtWeight')
-        h.Scale(1./h.Integral())
-        hists.append(h)
+    hists={}
+    hists["tosave"] = []
+    for typ in ntuples:
+        hists[typ] = []
+        pvar = var+corr
+        if typ=='GEN':
+            pvar = var
+        for sample in ntuples[typ]:
+            rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
+            rdf = rdf.Define("weight", "zPtWeight*genWeight*sumwWeight*xsec")
+            h_info=(var+"_"+sample, var+" "+sample, nbins, low, up)
+            h = rdf.Histo1D(h_info, pvar, 'weight')
+            hists[typ] += [h]
+        
+        h_sum = hists[typ][0].Clone(var+corr+"_"+typ)
+        for i in range(len(hists[typ])-1):
+            h_tmp = hists[typ][i].Clone("h_tmp")
+            h_sum.Add(h_tmp)
 
-        if s=='MC' and not 'cor' in var:
-            h_info=(var+"_GEN", var+" "+s, nbins, low, up)
-            h = rdf.Histo1D(h_info, 'gen'+var, 'zPtWeight')
-            h.Scale(1./h.Integral())
-            hists.append(h)
+        h_sum.Scale(1./h_sum.Integral())
+        hists["tosave"] += [h_sum]
     
     tf = ROOT.TFile(f"{hdir}{fname}.root", option)
-    for h in hists:
+    for h in hists["tosave"]:
         h.Write()
     tf.Close()
 
@@ -185,7 +193,7 @@ def plot_hists(hfile, hists, outfile, binsx=[], binsy=[], dim=1):
 def plot_stuff(pdir, eta_bins, phi_bins):
     # Z mass
     os.makedirs(f'{pdir}mass_z/', exist_ok=True)
-    for corr in ['', '_mean_roccor', '_median_roccor', '_peak_roccor']:
+    for corr in ['', '_mean_roccor', '_median_roccor']:
         plot_hists(
             hfile='hists/mass_z.root',
             hists={
@@ -213,15 +221,7 @@ def plot_stuff(pdir, eta_bins, phi_bins):
         'median_pos': {
             'MC': "h_oneOverPt_MC_median_pos",
             'DATA': "h_oneOverPt_DATA_median_pos"
-        },
-        'peak_neg': {
-            'MC': "h_oneOverPt_MC_peak_neg",
-            'DATA': "h_oneOverPt_DATA_peak_neg"
-        },
-        'peak_pos': {
-            'MC': "h_oneOverPt_MC_peak_pos",
-            'DATA': "h_oneOverPt_DATA_peak_pos"
-        },
+        }
     }
     os.makedirs(f'{pdir}oneOverPt/', exist_ok=True)
     for h in hdict:
@@ -234,9 +234,9 @@ def plot_stuff(pdir, eta_bins, phi_bins):
             binsy = phi_bins 
         )
         plot_hists(
-            hfile='hists/oneOverPt_peak_roccor.root',
+            hfile='hists/oneOverPt_mean_roccor.root',
             hists=hdict[h],
-            outfile=f"{pdir}oneOverPt/oneOverPt_{h}_peak_roccor",
+            outfile=f"{pdir}oneOverPt/oneOverPt_{h}_mean_roccor",
             dim=2,
             binsx = eta_bins,
             binsy = phi_bins 
