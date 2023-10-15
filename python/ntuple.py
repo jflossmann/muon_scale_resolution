@@ -176,6 +176,8 @@ def weight_zpt(ntuples, hdir):
         rdf = ROOT.RDataFrame("Events", ntuples[s])
         if s== "DATA":
             rdf = rdf.Define("zPtWeight", "1")
+        elif s=='GEN':
+            continue
         else:
             rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
             
