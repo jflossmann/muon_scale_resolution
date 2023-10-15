@@ -1,6 +1,7 @@
 import ROOT
 from array import array
 import yaml
+import time
 
 # function in c++ code. Finds indices of muons closest to z boson mass
 ROOT.gInterpreter.Declare("""
@@ -147,8 +148,7 @@ def hist_zpt(ntuples, pt_bins, hdir):
     ROOT.gStyle.SetOptStat(0)
     hists = []
 
-    for s in ntuples:
-
+    for s in list(ntuples.keys())+["GEN"]:
         rdf = ROOT.RDataFrame("Events", ntuples[s])
 
         h = rdf.Histo1D((f"h_Zboson_pt_{s}", "", len(pt_bins)-1, array('f', pt_bins)), "pt_Z")
@@ -168,16 +168,16 @@ def hist_zpt(ntuples, pt_bins, hdir):
 def weight_zpt(ntuples, hdir):
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}z_reweighting.root", "READ");')
     ROOT.gROOT.ProcessLine('TH1D* h_dt = (TH1D*)tf->Get("h_Zboson_pt_DATA");')
-    ROOT.gROOT.ProcessLine('TH1D* h_mc = (TH1D*)tf->Get("h_Zboson_pt_MC");')
+    ROOT.gROOT.ProcessLine('TH1D* h_mc = (TH1D*)tf->Get("h_Zboson_pt_DY");')
     ROOT.gROOT.ProcessLine('TH1D* h_ratio = (TH1D*)h_dt->Clone();')
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
    
-    for s in ntuples:
+    for s in ["GEN"] + list(ntuples.keys()):
         rdf = ROOT.RDataFrame("Events", ntuples[s])
         if s== "DATA":
-            rdf = rdf.Define("zPtWeight", "1")
+            rdf = rdf.Redefine("zPtWeight", "1")
         else:
-            rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
+            rdf = rdf.Redefine("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
             
         quants = list(rdf.GetColumnNames())
         rdf.Snapshot("Events", ntuples[s], quants)
@@ -187,11 +187,13 @@ def weight_zpt(ntuples, hdir):
 
 # function which creates ntuple files from nanoaod
 def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
-    for s in nanoAODs:
+    for s in list(nanoAODs.keys())[:-1]:
+        start = time.time()
+        print(f"Processing {s} samples. Number of Files: {len(nanoAODs[s])}")
         quants = [
             "pt_Z", "mass_Z", "eta_Z", "phi_Z",
             "pt_1", "mass_1", "eta_1", "phi_1", "charge_1",
-            "pt_2", "mass_2", "eta_2", "phi_2", "charge_2",
+            "pt_2", "mass_2", "eta_2", "phi_2", "charge_2"
         ]
         # load nanoAOD
         rdf = ROOT.RDataFrame("Events", nanoAODs[s])
@@ -238,8 +240,15 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
 
         rdf = rdf.Define("acceptance", str(n_filt/n_tot))
         rdf = rdf.Define("xsec", str(datasets[s]['xsec']))
+
+        # make output with interesting data
+        rdf.Snapshot("Events", ntuples[s], quants)
+        end = time.time()
+        print(f"Finished processing of {s} samples in {round(end-start,1)}s.")
         
-        if s!="DATA":
+        if s=="DY":
+            start = time.time()
+            print(f"Calculation of Gen quantities for GEN samples.")
             # perform gen delta R matching and collect corresponding events and gen quantities
             rdf = rdf.Define("genind_1", """muon_genmatch(
                                                 eta_1,
@@ -261,7 +270,10 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
                                                 &GenPart_eta,
                                                 &GenPart_phi
                                                 )""")
-            rdf = rdf.Filter("genind_1 != -99 && genind_2 != -99 && genind_1 != genind_2")
+            # if gen matching successfull: save information of gen event
+            rdf = rdf.Define("gen_mask", "genind_1 != -99 && genind_2 != -99 && genind_1 != genind_2")
+            rdf = rdf.Filter("gen_mask")
+
             rdf = rdf.Define("genpt_1", "GenPart_pt[genind_1]")
             rdf = rdf.Define("genpt_2", "GenPart_pt[genind_2]")
             rdf = rdf.Define("geneta_1", "GenPart_eta[genind_1]")
@@ -285,12 +297,13 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
             quants += [
                 "genpt_1", "genmass_1", "geneta_1", "genphi_1", "gencharge_1",
                 "genpt_2", "genmass_2", "geneta_2", "genphi_2", "gencharge_2",
-                "genpt_Z", "genmass_Z", "geneta_Z", "genphi_Z",
-                "Pileup_nPU"
+                "genpt_Z", "genmass_Z", "geneta_Z", "genphi_Z"
             ]
 
-        # make output with interesting data
-        rdf.Snapshot("Events", ntuples[s], quants)
+            # make output with interesting data
+            rdf.Snapshot("Events", ntuples[s].replace("DY", "GEN"), quants)
+            end = time.time()
+            print(f"Finished processing of GEN samples in {round(end-start,1)}s.")
 
     return
 
@@ -300,21 +313,3 @@ def yaml_loader(fname):
         dsets = yaml.load(f, Loader=yaml.Loader)
     #print(dsets)
     return dsets
-
-
-# produces ntuples with all important quantities (also possible in rochester_rdf.py with parser arguments)
-if __name__=='__main__':
-    pt_bins = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 140, 200]
-    nanoAODs = {
-        'MC': f"{datadir}MC.root",
-        'DATA': f"{datadir}DATA.root",
-    }
-    ntuples = {
-        'MC': f"{datadir}MC_ntuples.root",
-        'DATA': f"{datadir}DATA_ntuples.root",
-    }
-    hists = 'hists/'
-
-    ntuple.make_ntuples(nanoAODs, ntuples, pt_bins, hists)
-    ntuple.hist_zpt(ntuples, pt_bins)
-    ntuple.weight_zpt(ntuples)

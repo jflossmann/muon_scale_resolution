@@ -68,11 +68,16 @@ if __name__=='__main__':
     datasets = ntuple.yaml_loader('configs/datasets.yaml')
     ntuples = {
         'DATA': f"{datadir}DATA_ntuples.root",
-        'MC': f"{datadir}MC_ntuples.root",
+        'DY': f"{datadir}DY_ntuples.root",
+        'WW': f"{datadir}WW_ntuples.root",
+        'WZ': f"{datadir}WZ_ntuples.root",
+        'ZZ': f"{datadir}ZZ_ntuples.root",
+        'TT': f"{datadir}TT_ntuples.root",
+        'GEN': f"{datadir}GEN_ntuples.root"
     }
     ntuples_corr = {
         'DATA': f"{datadir}DATA_ntuples_corr.root",
-        'MC': f"{datadir}MC_ntuples_corr.root",
+        'DY': f"{datadir}MC_ntuples_corr.root",
     }
     hdir = 'hists/'
     pdir = 'plots/'
@@ -80,7 +85,7 @@ if __name__=='__main__':
     args = parse_args()
 
     if args.ntuples:
-        ntuple.make_ntuples(nanoAODs, datasets, ntuples, pt_bins)
+        # ntuple.make_ntuples(nanoAODs, datasets, ntuples, pt_bins)
         os.makedirs(hdir, exist_ok=True)
         ntuple.hist_zpt(ntuples, pt_bins, hdir)
         ntuple.weight_zpt(ntuples, hdir)
