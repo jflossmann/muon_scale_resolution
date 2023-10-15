@@ -67,13 +67,15 @@ if __name__=='__main__':
     nanoAODs = ntuple.yaml_loader('data/nanoAODs.yaml')
     datasets = ntuple.yaml_loader('data/datasets.yaml')
     ntuples = {
-        'DATA': f"{datadir}DATA_ntuples.root",
-        'DY': f"{datadir}DY_ntuples.root",
-        'WW': f"{datadir}WW_ntuples.root",
-        'WZ': f"{datadir}WZ_ntuples.root",
-        'ZZ': f"{datadir}ZZ_ntuples.root",
-        'TT': f"{datadir}TT_ntuples.root",
-        'GEN': f"{datadir}GEN_ntuples.root"
+        'DATA': {'DATA': f"{datadir}DATA_ntuples.root"},
+        'MC': {
+            'DY': f"{datadir}DY_ntuples.root",
+            'WW': f"{datadir}WW_ntuples.root",
+            'WZ': f"{datadir}WZ_ntuples.root",
+            'ZZ': f"{datadir}ZZ_ntuples.root",
+            'TT': f"{datadir}TT_ntuples.root",
+        },
+        'GEN': {'GEN': f"{datadir}GEN_ntuples.root"}
     }
     ntuples_corr = {
         'DATA': f"{datadir}DATA_ntuples_corr.root",

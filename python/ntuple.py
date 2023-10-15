@@ -148,12 +148,13 @@ def hist_zpt(ntuples, pt_bins, hdir):
     ROOT.gStyle.SetOptStat(0)
     hists = []
 
-    for s in list(ntuples.keys())+["GEN"]:
-        rdf = ROOT.RDataFrame("Events", ntuples[s])
+    for typ in ntuples:
+        for sample in ntuples[typ]:
+            rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
 
-        h = rdf.Histo1D((f"h_Zboson_pt_{s}", "", len(pt_bins)-1, array('f', pt_bins)), "pt_Z")
-        h.Scale(1./h.Integral())
-        hists.append(h)
+            h = rdf.Histo1D((f"h_Zboson_pt_{sample}", "", len(pt_bins)-1, array('f', pt_bins)), "pt_Z")
+            h.Scale(1./h.Integral())
+            hists.append(h)
 
     tf = ROOT.TFile(f"{hdir}z_reweighting.root", "RECREATE")
     for h in hists:
@@ -172,27 +173,35 @@ def weight_zpt(ntuples, hdir):
     ROOT.gROOT.ProcessLine('TH1D* h_ratio = (TH1D*)h_dt->Clone();')
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
    
-    for s in ntuples:
-        print(s)
-        rdf = ROOT.RDataFrame("Events", ntuples[s])
-        if s== "DATA":
-            rdf = rdf.Define("zPtWeight", "1")
-        elif s=='GEN':
-            continue
-        else:
-            rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
-            
-        quants = list(rdf.GetColumnNames())
-        rdf.Snapshot("Events", ntuples[s], quants)
+    for typ in ntuples:
+        for sample in ntuples[typ]:
+            print(sample)
+            rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
+            if typ == "DATA":
+                rdf = rdf.Define("zPtWeight", "1")
+            elif typ == 'GEN':
+                continue
+            else:
+                rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
+                
+            quants = list(rdf.GetColumnNames())
+            rdf.Snapshot("Events", ntuples[typ][sample].replace(".root", "_zPt.root"), quants)
 
     return
 
 
 # function which creates ntuple files from nanoaod
 def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
-    for s in list(nanoAODs.keys())[1:-1]:
+    print(ntuples)
+    for sample in nanoAODs:
+        if sample=='DATA':
+            typ = 'DATA'
+            continue
+        else:
+            typ = 'MC'
+
         start = time.time()
-        print(f"Processing {s} samples. Number of Files: {len(nanoAODs[s])}")
+        print(f"Processing {sample} samples. Number of Files: {len(nanoAODs[sample])}")
         quants = [
             "pt_Z", "mass_Z", "eta_Z", "phi_Z",
             "pt_1", "mass_1", "eta_1", "phi_1", "charge_1",
@@ -200,10 +209,10 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
             "genWeight", "sumwWeight", "xsec"
         ]
         # load nanoAOD
-        rdf = ROOT.RDataFrame("Events", nanoAODs[s])
+        rdf = ROOT.RDataFrame("Events", nanoAODs[sample])
         n_tot = rdf.Count().GetValue()
 
-        if s=='DATA':
+        if sample=='DATA':
             rdf = rdf.Define("genWeight", "1")
         #else:
             #rdf = rdf.Define("genWeight", "Generator_weight")
@@ -248,15 +257,17 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
         
         rdf = rdf.Filter("mass_Z > 50 && mass_Z < 130")
 
-        rdf = rdf.Define("xsec", str(datasets[s]['xsec']))
+        rdf = rdf.Define("xsec", str(datasets[sample]['xsec']))
 
         # make output with interesting data
-        rdf.Snapshot("Events", ntuples[s], quants)
+        rdf.Snapshot("Events", ntuples[typ][sample], quants)
         end = time.time()
-        print(f"Finished processing of {s} samples in {round(end-start,1)}s.")
+        print(f"Finished processing of {sample} samples in {round(end-start,1)} s.")
         
-        if s=="DY":
+        if sample=="DY":
             start = time.time()
+            sample = 'GEN'
+            typ = 'GEN'
             print(f"Calculation of Gen quantities for GEN samples.")
             # perform gen delta R matching and collect corresponding events and gen quantities
             rdf = rdf.Define("genind_1", """muon_genmatch(
@@ -310,9 +321,9 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
             ]
 
             # make output with interesting data
-            rdf.Snapshot("Events", ntuples[s].replace("DY", "GEN"), quants)
+            rdf.Snapshot("Events", ntuples[typ][sample], quants)
             end = time.time()
-            print(f"Finished processing of GEN samples in {round(end-start,1)}s.")
+            print(f"Finished processing of GEN samples in {round(end-start,1)} s.")
 
     return
 
