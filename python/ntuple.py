@@ -172,7 +172,8 @@ def weight_zpt(ntuples, hdir):
     ROOT.gROOT.ProcessLine('TH1D* h_ratio = (TH1D*)h_dt->Clone();')
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
    
-    for s in ["GEN"] + list(ntuples.keys()):
+    for s in ntuples:
+        print(s)
         rdf = ROOT.RDataFrame("Events", ntuples[s])
         if s== "DATA":
             rdf = rdf.Define("zPtWeight", "1")
