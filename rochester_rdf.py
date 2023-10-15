@@ -53,8 +53,8 @@ def parse_args():
 
 if __name__=='__main__':
 
-    pt_bins = [20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
-    oneOverPt_bins = np.linspace(1/200,1/20, 200)#[i/2000000. for i in range(200000)]
+    pt_bins = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
+    oneOverPt_bins = np.linspace(1/200,1/15, 200)#[i/2000000. for i in range(200000)]
     eta_bins = [-2.4, -2.1, -1.85, -0.4, 0, 0.4, 1.85, 2.1, 2.4]
     phi_bins = np.linspace(-3.2, 3.2, 17) #[-3.2, -2.4, -1.6, -.8, 0, .8, 1.6, 2.4, 3.2]
     charge_bins = [-2,0,2]
@@ -64,8 +64,8 @@ if __name__=='__main__':
     xsec = 5600
     
     datadir = "/ceph/jdriesch/rochester/"
-    nanoAODs = ntuple.yaml_loader('configs/nanoAODs.yaml')
-    datasets = ntuple.yaml_loader('configs/datasets.yaml')
+    nanoAODs = ntuple.yaml_loader('data/nanoAODs.yaml')
+    datasets = ntuple.yaml_loader('data/datasets.yaml')
     ntuples = {
         'DATA': f"{datadir}DATA_ntuples.root",
         'DY': f"{datadir}DY_ntuples.root",
@@ -79,13 +79,18 @@ if __name__=='__main__':
         'DATA': f"{datadir}DATA_ntuples_corr.root",
         'DY': f"{datadir}MC_ntuples_corr.root",
     }
+    sf_path = 'data/scaleFactors/Run2/UL/2018/2018_Z/Efficiencies_muon_generalTracks_Z_Run2018_UL_'
+    SFs = {
+        'ID': ntuple.load_hist(sf_path+'ID.root', 'NUM_MediumID_DEN_TrackerMuons_abseta_pt'),
+        'ISO': ntuple.load_hist(sf_path+'ISO.root', 'NUM_TightRelIso_DEN_MediumID_abseta_pt')
+    }
     hdir = 'hists/'
     pdir = 'plots/'
 
     args = parse_args()
 
     if args.ntuples:
-        # ntuple.make_ntuples(nanoAODs, datasets, ntuples, pt_bins)
+        ntuple.make_ntuples(nanoAODs, datasets, ntuples, pt_bins)
         os.makedirs(hdir, exist_ok=True)
         ntuple.hist_zpt(ntuples, pt_bins, hdir)
         ntuple.weight_zpt(ntuples, hdir)
