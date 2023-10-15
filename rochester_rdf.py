@@ -77,10 +77,29 @@ if __name__=='__main__':
         },
         'GEN': {'GEN': f"{datadir}GEN_ntuples.root"}
     }
-    ntuples_corr = {
-        'DATA': f"{datadir}DATA_ntuples_corr.root",
-        'DY': f"{datadir}MC_ntuples_corr.root",
+    ntuples_zPt = {
+        'DATA': {'DATA': f"{datadir}DATA_ntuples_zPt.root"},
+        'MC': {
+            'DY': f"{datadir}DY_ntuples_zPt.root",
+            'WW': f"{datadir}WW_ntuples_zPt.root",
+            'WZ': f"{datadir}WZ_ntuples_zPt.root",
+            'ZZ': f"{datadir}ZZ_ntuples_zPt.root",
+            'TT': f"{datadir}TT_ntuples_zPt.root",
+        },
+        'GEN': {'GEN': f"{datadir}GEN_ntuples_zPt.root"}
     }
+    ntuples_corr = {
+        'DATA': {'DATA': f"{datadir}DATA_ntuples_zPt_corr.root"},
+        'MC': {
+            'DY': f"{datadir}DY_ntuples_zPt_corr.root",
+            'WW': f"{datadir}WW_ntuples_zPt_corr.root",
+            'WZ': f"{datadir}WZ_ntuples_zPt_corr.root",
+            'ZZ': f"{datadir}ZZ_ntuples_zPt_corr.root",
+            'TT': f"{datadir}TT_ntuples_zPt_corr.root",
+        },
+        'GEN': {'GEN': f"{datadir}GEN_ntuples_zPt.root"}
+    }
+
     sf_path = 'data/scaleFactors/Run2/UL/2018/2018_Z/Efficiencies_muon_generalTracks_Z_Run2018_UL_'
     SFs = {
         'ID': ntuple.load_hist(sf_path+'ID.root', 'NUM_MediumID_DEN_TrackerMuons_abseta_pt'),
@@ -99,15 +118,15 @@ if __name__=='__main__':
 
     if args.scale:
         os.makedirs(hdir, exist_ok=True)
-        corr.hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir)
-        corr.get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)
-        corr.apply_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)
-        corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_peak_roccor')
+        corr.hist_oneOverpT(ntuples_zPt, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir)
+        corr.get_scale_corrections(ntuples_zPt, eta_bins, phi_bins, charge_bins, hdir)
+        corr.apply_scale_corrections(ntuples_zPt, eta_bins, phi_bins, charge_bins, hdir)
+        corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_mean_roccor')
 
     if args.plot:
         os.makedirs(pdir, exist_ok=True)
         plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "RECREATE")
-        for corr in ['_mean_roccor', '_median_roccor', '_peak_roccor']:
+        for corr in ['_mean_roccor', '_median_roccor']:
             plot.hist_ntuples(ntuples_corr, "mass_Z"+corr, len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z")
         plot.plot_stuff(pdir, eta_bins, phi_bins)
         
