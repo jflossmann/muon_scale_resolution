@@ -16,6 +16,9 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
 
     #iterate over data sources
     for typ in ntuples:
+        hists[typ+'0'] = []
+        hists[typ+'1'] = []
+
         for sample in ntuples[typ]:
             gen = ""
             roccor = corr
@@ -28,8 +31,6 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
             rdf = rdf.Define("weight", "zPtWeight*genWeight*sumwWeight*xsec")
 
             for np in range(2):
-                hists[typ+str(np)] = []
-
                 #define new column for 1/pt
                 rdf = rdf.Define(f"oneOverPt_{np+1}", f"1./{gen}pt_{np+1}{roccor}")
                 #create 3D histogram
