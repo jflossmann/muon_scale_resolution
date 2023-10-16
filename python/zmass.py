@@ -14,10 +14,6 @@ plotdict = {
         'h_EtaPhiVsMz_pos_mean_roccor_MC': ['eta_2', 'phi_2', 'mass_Z_mean_roccor'],
         'h_EtaPhiVsMz_neg_median_roccor_MC': ['eta_1', 'phi_1', 'mass_Z_median_roccor'],
         'h_EtaPhiVsMz_pos_median_roccor_MC': ['eta_2', 'phi_2', 'mass_Z_median_roccor'],
-        'h_EtaPhiVsMz_neg_peak_roccor_MC': ['eta_1', 'phi_1', 'mass_Z_peak_roccor'],
-        'h_EtaPhiVsMz_pos_peak_roccor_MC': ['eta_2', 'phi_2', 'mass_Z_peak_roccor'],
-        'h_EtaPhiVsMz_neg_GEN': ['geneta_1', 'genphi_1', 'genmass_Z'],
-        'h_EtaPhiVsMz_pos_GEN': ['geneta_2', 'genphi_2', 'genmass_Z'],
     },
     'DATA': {
         'h_EtaPhiVsMz_neg_DATA': ['eta_1', 'phi_1', 'mass_Z'],
@@ -26,8 +22,10 @@ plotdict = {
         'h_EtaPhiVsMz_pos_mean_roccor_DATA': ['eta_2', 'phi_2', 'mass_Z_mean_roccor'],
         'h_EtaPhiVsMz_neg_median_roccor_DATA': ['eta_1', 'phi_1', 'mass_Z_median_roccor'],
         'h_EtaPhiVsMz_pos_median_roccor_DATA': ['eta_2', 'phi_2', 'mass_Z_median_roccor'],
-        'h_EtaPhiVsMz_neg_peak_roccor_DATA': ['eta_1', 'phi_1', 'mass_Z_peak_roccor'],
-        'h_EtaPhiVsMz_pos_peak_roccor_DATA': ['eta_2', 'phi_2', 'mass_Z_peak_roccor'],        
+    },
+    'GEN': {
+        'h_EtaPhiVsMz_neg_GEN': ['geneta_1', 'genphi_1', 'genmass_Z'],
+        'h_EtaPhiVsMz_pos_GEN': ['geneta_2', 'genphi_2', 'genmass_Z'],
     }
 }
 
@@ -69,34 +67,46 @@ def roofit_mass(hist, e, p):
 
 def hist_zmass(ntuples, eta_bins, phi_bins, mass_bins, hdir)->None:
     """produces 3D and 1D histograms from given ntuples"""
-    hists_3d = []
+    hists_3d = {}
+    hists_3d["tosave"] = []
     hists_1d = []
-    for s in ntuples:
-        rdf = ROOT.RDataFrame("Events", ntuples[s])
+    for typ in ntuples:
+        for n in plotdict[typ]:
+            hists_3d[typ+n] = []
+        
+        for n in plotdict[typ]:
 
-        for n in plotdict[s]:
-            #create 3D histogram from ntuple
-            hists_3d.append(
-                rdf.Histo3D(
-                    (
-                        n, "",
-                        len(eta_bins)-1, array('d', eta_bins),
-                        len(phi_bins)-1, array('d', phi_bins),
-                        len(mass_bins)-1, array('d', mass_bins),
-                    ),
-                plotdict[s][n][0], plotdict[s][n][1], plotdict[s][n][2],
-                'zPtWeight' 
+            for sample in ntuples[typ]:
+                rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
+
+                #create 3D histogram from ntuple
+                hists_3d[typ+n].append(
+                    rdf.Histo3D(
+                        (
+                            n, "",
+                            len(eta_bins)-1, array('d', eta_bins),
+                            len(phi_bins)-1, array('d', phi_bins),
+                            len(mass_bins)-1, array('d', mass_bins),
+                        ),
+                    plotdict[typ][n][0], plotdict[typ][n][1], plotdict[typ][n][2],
+                    'zPtWeight' 
+                    )
                 )
-            )
+            h_sum = hists_3d[typ+n][0].Clone(typ+n)
+            for i in range(len(hists_3d[typ+n])-1):
+                h_tmp = hists_3d[typ+n][i+1].Clone("h_tmp")
+                h_sum.Add(h_tmp)
+
+            hists_3d["tosave"] += [h_sum]
 
             # extract bin by bin mass histograms from 3d
             for e in range(len(eta_bins)-1):
                 for p in range(len(phi_bins)-1):
-                    h = hists_3d[-1].ProjectionZ(f"{n}_eta{e}_phi{p}", e+1, e+1, p+1, p+1)
-                    hists_1d.append(h)
-                    
+                    h = hists_3d["tosave"][-1].ProjectionZ(f"{n}_eta{e}_phi{p}", e+1, e+1, p+1, p+1)
+                    hists_1d += [h]
+                        
     tf = ROOT.TFile(f'{hdir}zmass.root', 'recreate')
-    for h in hists_3d + hists_1d:
+    for h in hists_3d["tosave"] + hists_1d:
         h.Write()
     tf.Close()
 
@@ -148,7 +158,7 @@ def plot_zmass(eta_bins, phi_bins, hdir):
     os.makedirs(f'plots/zmass_fits/', exist_ok=True)
 
     for np in ['neg', 'pos']:
-        for roccor in ['', '_mean_roccor', '_median_roccor', '_peak_roccor']:
+        for roccor in ['', '_mean_roccor', '_median_roccor']:
             h_mc = tf.Get(f'h_EtaPhiVsMz_{np+roccor}_MC_fitresult')
             h_gen = tf.Get(f'h_EtaPhiVsMz_{np}_GEN_fitresult')
             h_data = tf.Get(f'h_EtaPhiVsMz_{np+roccor}_DATA_fitresult')
