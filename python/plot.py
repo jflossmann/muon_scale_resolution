@@ -139,7 +139,7 @@ def hist_ntuples(
         hists[typ] = []
         pvar = var+corr
         if typ=='GEN':
-            pvar = var
+            pvar = 'gen'+var
         for sample in ntuples[typ]:
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
             rdf = rdf.Define("weight", "zPtWeight*genWeight*sumwWeight*xsec")
