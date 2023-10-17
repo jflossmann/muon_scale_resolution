@@ -5,7 +5,7 @@ from multiprocessing import Pool, RLock
 import os
 
 #define different statistics to base corrections on
-modes = ['mean', 'median']    
+modes = ['mean', 'median']
 
 def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='')->None:
     """create histograms for inverse transversal momentum from ntuple data"""
@@ -20,6 +20,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
         hists[typ+'1'] = []
 
         for sample in ntuples[typ]:
+            print(sample)
             gen = ""
             roccor = corr
             if typ == "GEN":
@@ -28,7 +29,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
             #create RDataframe to acess data
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
             print(ntuples[typ][sample])
-            rdf = rdf.Define("weight", "zPtWeight*genWeight*sumwWeight*xsec")
+            rdf = rdf.Define("weight", "zPtWeight*genWeight*sumwWeight*xsec*sf_id*sf_iso")
 
             for np in range(2):
                 #define new column for 1/pt
@@ -48,15 +49,33 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
                 )
                 hists[typ+str(np)] += [h_3d]
 
-        for np in range(2):
-            h_sum = hists[typ+str(np)][0].Clone(f"h_oneOverPt_{typ}_{negpos[np]}")
-            for i in range(len(hists[typ+str(np)])-1):
-                h_tmp = hists[typ+str(np)][i+1].Clone("h_tmp")
-                h_sum.Add(h_tmp)
+    # get data-bkg histogram
+    for np in range(2):
+        # get histograms of Signal MC and Data and GEN
+        h_mc = hists['SIG'+str(np)][0].Clone(f"h_oneOverPt_MC_{negpos[np]}")
+        h_dt = hists['DATA'+str(np)][0].Clone(f"h_oneOverPt_DATA_{negpos[np]}")
 
+        # get histogram of combined backgrounds (not normalized to data)
+        h_sum_bkg = hists['BKG'+str(np)][0].Clone(f"h_oneOverPt_BKG_{negpos[np]}")
+        for i in range(len(hists['BKG'+str(np)])-1):
+            h_tmp = hists['BKG'+str(np)][i+1].Clone("h_tmp")
+            h_sum_bkg.Add(h_tmp)
+        
+        # calculate combined MC contribution to extract MC->Data normalization SF
+        h_mc.Add(h_sum_bkg)
+        sf = h_dt.Integral() / h_mc.Integral()
+
+        # scale backgrounds to data
+        h_sum_bkg.Scale(sf)
+        h_dt.Add(h_sum_bkg, -1)
+
+        hists["tosave"] += [h_dt, hists['SIG'+str(np)][0], hists['GEN'+str(np)][0]]
+
+        # get median
+        for h in hists["tosave"][-3:]:
             #create histogram for median
             h_median = ROOT.TH2D(
-                f"h_oneOverPt_{typ}_median_{negpos[np]}", "",
+                h.GetName()+"_median", "",
                 len(eta_bins)-1, array('d', eta_bins), 
                 len(phi_bins)-1, array('d', phi_bins)
             )
@@ -66,12 +85,12 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
 
             for e in range(len(eta_bins)-1):
                 for p in range(len(phi_bins)-1):
-                    h_ep = h_sum.ProjectionZ(f"h_tmp_{e}_{p}", e+1, e+1, p+1, p+1)
+                    h_ep = h.ProjectionZ(f"h_tmp_{e}_{p}", e+1, e+1, p+1, p+1)
 
                     h_ep.GetQuantiles(1, median, quantile)
                     h_median.SetBinContent(e+1, p+1, median[0])
 
-            hists["tosave"] += [h_sum, h_sum.Project3DProfile("yx"), h_median]            
+            hists["tosave"] += [h.Project3DProfile("yx"), h_median]            
         
     #save
     tf = ROOT.TFile(f"{hdir}oneOverPt{corr}.root","RECREATE")
@@ -81,7 +100,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
 
 
 
-def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)->None: 
+def get_scale_corrections(samples, eta_bins, phi_bins, charge_bins, hdir)->None: 
     """extract scale corrections from ntuple data"""
 
     #charges
@@ -92,20 +111,20 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)->None:
     oneOverPt_hists = {}
 
     #iterate over data, mc and gen
-    for typ in ntuples:
+    for typ in samples:
         for np in negpos:
             #read mean-histogram
             oneOverPt_hists[f"{typ}_mean_{np}"] = tf.Get(f'h_oneOverPt_{typ}_{np}_pyx')
             oneOverPt_hists[f"{typ}_mean_{np}"].SetDirectory(ROOT.nullptr)
             #read median histogram
-            oneOverPt_hists[f"{typ}_median_{np}"] = tf.Get(f'h_oneOverPt_{typ}_median_{np}')
+            oneOverPt_hists[f"{typ}_median_{np}"] = tf.Get(f'h_oneOverPt_{typ}_{np}_median')
             oneOverPt_hists[f"{typ}_median_{np}"].SetDirectory(ROOT.nullptr)
     tf.Close()
 
     # define correction factor C from paper as root 3d histogram
     C, Dm, Da, M, A = {}, {}, {}, {}, {}
     for mode in modes:
-        for typ in list(ntuples.keys())[:-1]:
+        for typ in samples[:-1]:
             #print(s)
             #make 3D-histograms for C, Dm, Da, M and A
             C[mode+typ] = ROOT.TH3D(
@@ -185,7 +204,7 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)->None:
     #safe histograms as Tfile
     tf = ROOT.TFile(f"{hdir}C.root", "RECREATE")
     for mode in modes:
-        for typ in list(ntuples.keys())[:-1]:
+        for typ in samples[:-1]:
             C[mode+typ].Write()
             Dm[mode+typ].Write()
             Da[mode+typ].Write()
@@ -195,15 +214,17 @@ def get_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir)->None:
 
 
 
-def apply_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
+def apply_scale_corrections(ntuples, hdir):
     #open Tfile with scale corrections
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}C.root", "READ");')
     for mode in modes:
         #read histograms for curent mode
         ROOT.gROOT.ProcessLine(f'TH2D* M_{mode}_DATA = (TH2D*)tf->Get("M_{mode}_DATA");')
-        ROOT.gROOT.ProcessLine(f'TH2D* M_{mode}_MC = (TH2D*)tf->Get("M_{mode}_MC");')
+        ROOT.gROOT.ProcessLine(f'TH2D* M_{mode}_SIG = (TH2D*)tf->Get("M_{mode}_SIG");')
+        ROOT.gROOT.ProcessLine(f'TH2D* M_{mode}_BKG = (TH2D*)tf->Get("M_{mode}_SIG");')
         ROOT.gROOT.ProcessLine(f'TH2D* A_{mode}_DATA = (TH2D*)tf->Get("A_{mode}_DATA");')
-        ROOT.gROOT.ProcessLine(f'TH2D* A_{mode}_MC = (TH2D*)tf->Get("A_{mode}_MC");')   
+        ROOT.gROOT.ProcessLine(f'TH2D* A_{mode}_SIG = (TH2D*)tf->Get("A_{mode}_SIG");')  
+        ROOT.gROOT.ProcessLine(f'TH2D* A_{mode}_BKG = (TH2D*)tf->Get("A_{mode}_SIG");')
     
     for typ in list(ntuples.keys())[:-1]:
         for sample in ntuples[typ]:
@@ -213,7 +234,6 @@ def apply_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
             #calculate reciprocal of momentum for both muons
             rdf = rdf.Define("oneOverPt_1", "1./pt_1")
             rdf = rdf.Define("oneOverPt_2", "1./pt_2")
-
             
             for mode in modes:
                 #calculate the corrected reciprocal pt
@@ -243,3 +263,4 @@ def apply_scale_corrections(ntuples, eta_bins, phi_bins, charge_bins, hdir):
                 
             #save everything in new ntuple
             rdf.Snapshot("Events", ntuples[typ][sample].replace('.root', '_corr.root'), quants)
+            print("done:", sample)

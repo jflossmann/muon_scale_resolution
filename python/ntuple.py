@@ -27,7 +27,7 @@ ROOT.gInterpreter.Declare("""
 
             for(int j=i; j<nMuon; j++){
                 if (Muon_pt->at(j) < 10) continue;
-                if (Muon_pt->at(j) < 25 && Muon_pt->at(j) < 25) continue;
+                if (Muon_pt->at(i) < 25 && Muon_pt->at(j) < 25) continue;
                 if(fabs(Muon_eta->at(j) > 2.4)) continue;
                 if(Muon_tkRelIso->at(j) > 0.1) continue;
                 if(Muon_mediumId->at(j)==0) continue;
@@ -169,19 +169,36 @@ def hist_zpt(ntuples, pt_bins, hdir):
 def weight_zpt(ntuples, hdir):
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}z_reweighting.root", "READ");')
     ROOT.gROOT.ProcessLine('TH1D* h_dt = (TH1D*)tf->Get("h_Zboson_pt_DATA");')
-    ROOT.gROOT.ProcessLine('TH1D* h_mc = (TH1D*)tf->Get("h_Zboson_pt_DY");')
+    ROOT.gROOT.ProcessLine('TH1D* h_mc = (TH1D*)tf->Get("h_Zboson_pt_SIG");')
     ROOT.gROOT.ProcessLine('TH1D* h_ratio = (TH1D*)h_dt->Clone();')
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
-   
+  
+    path_sf = 'data/scaleFactors/Run2/UL/2018/2018_Z/Efficiencies_muon_generalTracks_Z_Run2018_UL_{}.root'
+    path_id = path_sf.format('ID')
+    path_iso = path_sf.format('ISO')
+    print(path_id, path_iso)
+    ROOT.gROOT.ProcessLine(f'TFile* tf_id = TFile::Open("{path_id}", "read");')
+    ROOT.gROOT.ProcessLine('TH2F* h_id = (TH2F*)tf_id->Get("NUM_MediumID_DEN_TrackerMuons_abseta_pt");')
+    ROOT.gROOT.ProcessLine(f'TFile* tf_iso = TFile::Open("{path_iso}", "read");')
+    ROOT.gROOT.ProcessLine('TH2F* h_iso = (TH2F*)tf_iso->Get("NUM_TightRelIso_DEN_MediumID_abseta_pt");')
+
     for typ in ntuples:
         for sample in ntuples[typ]:
             print(sample)
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
             if typ == "DATA":
                 rdf = rdf.Define("zPtWeight", "1")
+                rdf = rdf.Define("sf_id_1", "1").Define("sf_id_2", "1")
+                rdf = rdf.Define("sf_iso_1", "1").Define("sf_iso_2", "1")
             else:
                 rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
-                
+                rdf = rdf.Define("sf_id_1", 'h_id->GetBinContent(h_id->GetXaxis()->FindBin(fabs(eta_1)), h_id->GetYaxis()->FindBin(pt_1))')
+                rdf = rdf.Define("sf_id_2", 'h_id->GetBinContent(h_id->GetXaxis()->FindBin(fabs(eta_2)), h_id->GetYaxis()->FindBin(pt_2))')
+                rdf = rdf.Define("sf_iso_1", 'h_iso->GetBinContent(h_id->GetXaxis()->FindBin(fabs(eta_1)), h_iso->GetYaxis()->FindBin(pt_1))')
+                rdf = rdf.Define("sf_iso_2", 'h_iso->GetBinContent(h_id->GetXaxis()->FindBin(fabs(eta_2)), h_iso->GetYaxis()->FindBin(pt_2))')
+
+            rdf = rdf.Define("sf_id", "sf_id_1 * sf_id_2").Define("sf_iso", "sf_iso_1 * sf_iso_2")
+
             quants = list(rdf.GetColumnNames())
             rdf.Snapshot("Events", ntuples[typ][sample].replace(".root", "_zPt.root"), quants)
 
@@ -189,14 +206,8 @@ def weight_zpt(ntuples, hdir):
 
 
 # function which creates ntuple files from nanoaod
-def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
-    print(ntuples)
+def make_ntuples(nanoAODs, datasets, datadir):
     for sample in nanoAODs:
-        if sample=='DATA':
-            typ = 'DATA'
-            continue
-        else:
-            typ = 'MC'
 
         start = time.time()
         print(f"Processing {sample} samples. Number of Files: {len(nanoAODs[sample])}")
@@ -208,7 +219,6 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
         ]
         # load nanoAOD
         rdf = ROOT.RDataFrame("Events", nanoAODs[sample])
-        n_tot = rdf.Count().GetValue()
 
         if sample=='DATA':
             rdf = rdf.Define("genWeight", "1")
@@ -258,14 +268,13 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
         rdf = rdf.Define("xsec", str(datasets[sample]['xsec']))
 
         # make output with interesting data
-        rdf.Snapshot("Events", ntuples[typ][sample], quants)
+        rdf.Snapshot("Events", datadir+sample+"_ntuples.root", quants)
         end = time.time()
         print(f"Finished processing of {sample} samples in {round(end-start,1)} s.")
         
         if sample=="DY":
             start = time.time()
             sample = 'GEN'
-            typ = 'GEN'
             print(f"Calculation of Gen quantities for GEN samples.")
             # perform gen delta R matching and collect corresponding events and gen quantities
             rdf = rdf.Define("genind_1", """muon_genmatch(
@@ -319,7 +328,7 @@ def make_ntuples(nanoAODs, datasets, ntuples, pt_bins):
             ]
 
             # make output with interesting data
-            rdf.Snapshot("Events", ntuples[typ][sample], quants)
+            rdf.Snapshot("Events", datadir+sample+"_ntuples.root", quants)
             end = time.time()
             print(f"Finished processing of GEN samples in {round(end-start,1)} s.")
 
