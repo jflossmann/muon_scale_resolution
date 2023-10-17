@@ -7,13 +7,13 @@ import os
 
 #Dictionary for names and variables of histograms
 plotdict = {
-    'MC': {
-        'h_EtaPhiVsMz_neg_MC': ['eta_1', 'phi_1', 'mass_Z'],
-        'h_EtaPhiVsMz_pos_MC': ['eta_2', 'phi_2', 'mass_Z'],
-        'h_EtaPhiVsMz_neg_mean_roccor_MC': ['eta_1', 'phi_1', 'mass_Z_mean_roccor'],
-        'h_EtaPhiVsMz_pos_mean_roccor_MC': ['eta_2', 'phi_2', 'mass_Z_mean_roccor'],
-        'h_EtaPhiVsMz_neg_median_roccor_MC': ['eta_1', 'phi_1', 'mass_Z_median_roccor'],
-        'h_EtaPhiVsMz_pos_median_roccor_MC': ['eta_2', 'phi_2', 'mass_Z_median_roccor'],
+    'SIG': {
+        'h_EtaPhiVsMz_neg_SIG': ['eta_1', 'phi_1', 'mass_Z'],
+        'h_EtaPhiVsMz_pos_SIG': ['eta_2', 'phi_2', 'mass_Z'],
+        'h_EtaPhiVsMz_neg_mean_roccor_SIG': ['eta_1', 'phi_1', 'mass_Z_mean_roccor'],
+        'h_EtaPhiVsMz_pos_mean_roccor_SIG': ['eta_2', 'phi_2', 'mass_Z_mean_roccor'],
+        'h_EtaPhiVsMz_neg_median_roccor_SIG': ['eta_1', 'phi_1', 'mass_Z_median_roccor'],
+        'h_EtaPhiVsMz_pos_median_roccor_SIG': ['eta_2', 'phi_2', 'mass_Z_median_roccor'],
     },
     'DATA': {
         'h_EtaPhiVsMz_neg_DATA': ['eta_1', 'phi_1', 'mass_Z'],
@@ -71,6 +71,8 @@ def hist_zmass(ntuples, eta_bins, phi_bins, mass_bins, hdir)->None:
     hists_3d["tosave"] = []
     hists_1d = []
     for typ in ntuples:
+        if typ=='BKG':
+            continue
         for n in plotdict[typ]:
             hists_3d[typ+n] = []
         
@@ -78,7 +80,7 @@ def hist_zmass(ntuples, eta_bins, phi_bins, mass_bins, hdir)->None:
 
             for sample in ntuples[typ]:
                 rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
-
+                rdf = rdf.Define("weight", "zPtWeight*genWeight*sumwWeight*sf_id*sf_iso")
                 #create 3D histogram from ntuple
                 hists_3d[typ+n].append(
                     rdf.Histo3D(
@@ -89,7 +91,7 @@ def hist_zmass(ntuples, eta_bins, phi_bins, mass_bins, hdir)->None:
                             len(mass_bins)-1, array('d', mass_bins),
                         ),
                     plotdict[typ][n][0], plotdict[typ][n][1], plotdict[typ][n][2],
-                    'zPtWeight' 
+                    'weight' 
                     )
                 )
             h_sum = hists_3d[typ+n][0].Clone(typ+n)
@@ -159,7 +161,7 @@ def plot_zmass(eta_bins, phi_bins, hdir):
 
     for np in ['neg', 'pos']:
         for roccor in ['', '_mean_roccor', '_median_roccor']:
-            h_mc = tf.Get(f'h_EtaPhiVsMz_{np+roccor}_MC_fitresult')
+            h_mc = tf.Get(f'h_EtaPhiVsMz_{np+roccor}_SIG_fitresult')
             h_gen = tf.Get(f'h_EtaPhiVsMz_{np}_GEN_fitresult')
             h_data = tf.Get(f'h_EtaPhiVsMz_{np+roccor}_DATA_fitresult')
 
