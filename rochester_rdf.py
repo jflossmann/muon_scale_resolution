@@ -54,7 +54,7 @@ def parse_args():
 if __name__=='__main__':
     diffpt_bins = np.linspace(-0.01, 0.01, 200)
     pt_bins = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
-    oneOverPt_bins = np.linspace(1/100,1/25, 50)#[i/2000000. for i in range(200000)]
+    oneOverPt_bins = np.linspace(0.019,0.027, 50)#[i/2000000. for i in range(200000)]
     eta_bins = [-2.4, -2.1, -1.85, -0.4, 0, 0.4, 1.85, 2.1, 2.4]
     phi_bins = np.linspace(-3.2, 3.2, 17) #[-3.2, -2.4, -1.6, -.8, 0, .8, 1.6, 2.4, 3.2]
     charge_bins = [-2,0,2]
