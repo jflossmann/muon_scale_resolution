@@ -21,10 +21,11 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
 
         for sample in ntuples[typ]:
             print(sample)
-            gen = ""
+            gen, sgen = "", ""
             roccor = corr
             if typ == "GEN":
-                gen = "gen"
+                sgen = "smearedgen"
+                gen = 'gen'
                 roccor = ''
             #create RDataframe to acess data
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
@@ -33,7 +34,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
 
             for np in range(2):
                 #define new column for 1/pt
-                rdf = rdf.Define(f"oneOverPt_{np+1}", f"1./{gen}pt_{np+1}{roccor}")
+                rdf = rdf.Define(f"oneOverPt_{np+1}", f"1./{sgen}pt_{np+1}{roccor}")
                 #create 3D histogram
                 h_3d = rdf.Histo3D(
                     (

@@ -52,24 +52,22 @@ def parse_args():
 
 
 if __name__=='__main__':
-
-    pt_bins = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
-    oneOverPt_bins = np.linspace(1/200,1/15, 200)#[i/2000000. for i in range(200000)]
+    diffpt_bins = np.linspace(-0.01, 0.01, 200)
+    pt_bins = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
+    oneOverPt_bins = np.linspace(1/100,1/25, 50)#[i/2000000. for i in range(200000)]
     eta_bins = [-2.4, -2.1, -1.85, -0.4, 0, 0.4, 1.85, 2.1, 2.4]
     phi_bins = np.linspace(-3.2, 3.2, 17) #[-3.2, -2.4, -1.6, -.8, 0, .8, 1.6, 2.4, 3.2]
     charge_bins = [-2,0,2]
     mass_bins = np.linspace(75, 105, 61)
-
-    lumi = 31906.78
-    xsec = 5600
     
     datadir = "/ceph/jdriesch/rochester/"
     nanoAODs = ntuple.yaml_loader('data/nanoAODs.yaml')
     datasets = ntuple.yaml_loader('data/datasets.yaml')
+    samples_to_plot = ["DATA", "SIG", "GEN"]
     ntuples = {
         'DATA': {'DATA': f"{datadir}DATA_ntuples.root"},
-        'MC': {
-            'DY': f"{datadir}DY_ntuples.root",
+        'SIG': {'SIG': f"{datadir}DY_ntuples.root"},
+        'BKG': {            
             'WW': f"{datadir}WW_ntuples.root",
             'WZ': f"{datadir}WZ_ntuples.root",
             'ZZ': f"{datadir}ZZ_ntuples.root",
@@ -79,8 +77,8 @@ if __name__=='__main__':
     }
     ntuples_zPt = {
         'DATA': {'DATA': f"{datadir}DATA_ntuples_zPt.root"},
-        'MC': {
-            'DY': f"{datadir}DY_ntuples_zPt.root",
+        'SIG': {'SIG': f"{datadir}DY_ntuples_zPt.root"},
+        'BKG': {
             'WW': f"{datadir}WW_ntuples_zPt.root",
             'WZ': f"{datadir}WZ_ntuples_zPt.root",
             'ZZ': f"{datadir}ZZ_ntuples_zPt.root",
@@ -90,8 +88,8 @@ if __name__=='__main__':
     }
     ntuples_corr = {
         'DATA': {'DATA': f"{datadir}DATA_ntuples_zPt_corr.root"},
-        'MC': {
-            'DY': f"{datadir}DY_ntuples_zPt_corr.root",
+        'SIG': {'SIG': f"{datadir}DY_ntuples_zPt_corr.root"},
+        'BKG': {
             'WW': f"{datadir}WW_ntuples_zPt_corr.root",
             'WZ': f"{datadir}WZ_ntuples_zPt_corr.root",
             'ZZ': f"{datadir}ZZ_ntuples_zPt_corr.root",
@@ -111,17 +109,18 @@ if __name__=='__main__':
     args = parse_args()
 
     if args.ntuples:
-        ntuple.make_ntuples(nanoAODs, datasets, ntuples, pt_bins)
+        # ntuple.make_ntuples(nanoAODs, datasets, datadir)
         os.makedirs(hdir, exist_ok=True)
         ntuple.hist_zpt(ntuples, pt_bins, hdir)
-        ntuple.weight_zpt(ntuples, hdir)
+        ntuple.weight_zpt(ntuples, hdir, diffpt_bins, eta_bins, phi_bins) # weight also backgrounds and GEN?
 
     if args.scale:
         os.makedirs(hdir, exist_ok=True)
         corr.hist_oneOverpT(ntuples_zPt, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir)
-        corr.get_scale_corrections(ntuples_zPt, eta_bins, phi_bins, charge_bins, hdir)
-        corr.apply_scale_corrections(ntuples_zPt, eta_bins, phi_bins, charge_bins, hdir)
+        corr.get_scale_corrections(samples_to_plot, eta_bins, phi_bins, charge_bins, hdir)
+        corr.apply_scale_corrections(ntuples_zPt, hdir)
         corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_mean_roccor')
+        corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_median_roccor')
 
     if args.plot:
         os.makedirs(pdir, exist_ok=True)

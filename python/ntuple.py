@@ -164,9 +164,16 @@ def hist_zpt(ntuples, pt_bins, hdir):
     return 
 
 
+ROOT.gInterpreter.Declare("""
+        float gaus(){
+            return gRandom->Gaus(0,1);
+        }
+""")
+
+
 
 # function to add z pt weight. TODO: also for GEN or use reco instead?
-def weight_zpt(ntuples, hdir):
+def weight_zpt(ntuples, hdir, diffpt_bins, eta_bins, phi_bins):
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}z_reweighting.root", "READ");')
     ROOT.gROOT.ProcessLine('TH1D* h_dt = (TH1D*)tf->Get("h_Zboson_pt_DATA");')
     ROOT.gROOT.ProcessLine('TH1D* h_mc = (TH1D*)tf->Get("h_Zboson_pt_SIG");')
@@ -199,10 +206,45 @@ def weight_zpt(ntuples, hdir):
 
             rdf = rdf.Define("sf_id", "sf_id_1 * sf_id_2").Define("sf_iso", "sf_iso_1 * sf_iso_2")
 
+            # smear gen pt
+            if typ=='GEN':
+                rdf = rdf.Define("diff_pt_1", "genpt_1 - pt_1")
+                rdf = rdf.Define("diff_pt_2", "genpt_2 - pt_2")
+                h_genreco_1 = rdf.Histo3D(
+                    (
+                        "h_genreco_1", "",
+                        len(eta_bins)-1, array('f', eta_bins),
+                        len(phi_bins)-1, array('f', phi_bins),
+                        len(diffpt_bins)-1, array('f', diffpt_bins)
+                    ),
+                    "eta_1", "phi_1", "diff_pt_1"
+                )
+                h_genreco_2 = rdf.Histo3D(
+                    (
+                        "h_genreco_2", "",
+                        len(eta_bins)-1, array('f', eta_bins),
+                        len(phi_bins)-1, array('f', phi_bins),
+                        len(diffpt_bins)-1, array('f', diffpt_bins)
+                    ),
+                    "eta_2", "phi_2", "diff_pt_2"
+                )
+                tf = ROOT.TFile(f"{hdir}genreco.root", "recreate")
+                h_genreco_1.Project3DProfile("yx").Write()
+                h_genreco_2.Project3DProfile("yx").Write()
+                tf.Close()
+
+                ROOT.gROOT.ProcessLine(f'TFile* genreco = TFile::Open("{hdir}genreco.root", "read");')
+                ROOT.gROOT.ProcessLine(f'TProfile2D* h_genreco_1 = (TProfile2D*) genreco->Get("h_genreco_1_pyx");')
+                ROOT.gROOT.ProcessLine(f'TProfile2D* h_genreco_2 = (TProfile2D*) genreco->Get("h_genreco_2_pyx");')
+
+                rdf = rdf.Define("smearedgenpt_1", "genpt_1 * (1 + (float)(gaus()) * h_genreco_1->GetBinError(h_genreco_1->GetXaxis()->FindBin(eta_1), h_genreco_1->GetYaxis()->FindBin(phi_1)))")
+                rdf = rdf.Define("smearedgenpt_2", "genpt_2 * (1 + (float)(gaus()) * h_genreco_2->GetBinError(h_genreco_2->GetXaxis()->FindBin(eta_2), h_genreco_2->GetYaxis()->FindBin(phi_2)))")
+                
             quants = list(rdf.GetColumnNames())
             rdf.Snapshot("Events", ntuples[typ][sample].replace(".root", "_zPt.root"), quants)
 
     return
+
 
 
 # function which creates ntuple files from nanoaod
