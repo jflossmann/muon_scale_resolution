@@ -6,11 +6,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import ROOT
-
+import os
 
 
 def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pdir ,do_plot):
     #read data
+    pdir = pdir+'resolution/'
+    os.makedirs(pdir, exist_ok=True)
+    ROOT.gROOT.SetBatch(1)
     file=uproot.open(ntuples_gen)
     tree=file["Events"]
     variables=tree.keys()
@@ -31,8 +34,8 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
         plt.colorbar()
         plt.xlabel('|eta|')
         plt.ylabel('Number of Layers')
-        plt.savefig(f"./{pdir}/nL_abseta.png")
-        plt.savefig(f"./{pdir}/nL_abseta.pdf")
+        plt.savefig(f"./{pdir}nL_abseta.png")
+        plt.savefig(f"./{pdir}nL_abseta.pdf")
         plt.clf()
 
         #make x axis for polynom plot later
@@ -82,19 +85,27 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
             for k, value in enumerate(pull_hist):
                 hist.SetBinContent(k+1, value)
 
-            # Define the Crystal Ball function
-            crystal_ball = ROOT.TF1("crystal_ball", "[0]*ROOT::Math::crystalball_function(x, [1], [2], [3], [4])", pull_bins[0], pull_bins[-1])
-            # Set initial parameter values
-            crystal_ball.SetParameter(0, 1000)  # Amplitude
-            crystal_ball.SetParameter(1, 0.0)  # Mean
-            crystal_ball.SetParameter(2, std)  # Sigma
-            crystal_ball.SetParameter(3, 1.0)  # Alpha
-            crystal_ball.SetParameter(4, 1.0)  # N
+            if hist.Integral() == 0:
+                continue
 
-            # Fit the histogram with the Crystal Ball function
-            hist.Fit("crystal_ball")
-            fit_parameters = [crystal_ball.GetParameter(i) for i in range(5)]
-            parameter_errors = [crystal_ball.GetParError(i) for i in range(5)]
+            hist.Scale(1./hist.Integral())
+
+            x = ROOT.RooRealVar("x", "m_vis (GeV)", -5, 5)
+            x.setBins(10000,"cache")
+            x.setMin("cache", -10)
+            x.setMax("cache", 10)
+
+            mean = ROOT.RooRealVar("mean", "mean", 0, -1, 1)
+            sigma = ROOT.RooRealVar("sigma", "sigma", hist.GetStdDev(), 0, 5)
+            n = ROOT.RooRealVar("n", "n", 10, 0, 1000)
+            alpha = ROOT.RooRealVar("alpha", "alpha", 1, 0, 5)
+            cb = ROOT.RooCrystalBall("cb", "CrystalBall", x, mean, sigma,
+                                                sigma, alpha, n, alpha, n)
+            roohist = ROOT.RooDataHist("roohist", "", ROOT.RooArgSet(x), hist)
+            fitResult = cb.fitTo(roohist, ROOT.RooFit.AsymptoticError(True), ROOT.RooFit.PrintEvalErrors(-1))
+
+            fit_parameters = [mean.getVal(), sigma.getVal(), n.getVal(), alpha.getVal()]
+            parameter_errors = [mean.getError(), sigma.getError(), n.getError(), alpha.getError()]
 
             # Print the fit results
             for k, (param, error) in enumerate(zip(fit_parameters, parameter_errors)):
@@ -103,20 +114,17 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
             if do_plot:
                 # Create a canvas for plotting
                 c1 = ROOT.TCanvas("c1", "Fitted Histogram", 800, 600)
-
-                # Plot the histogram
-                hist.Draw()
-
-                # Plot the fitted function
-                crystal_ball.SetLineColor(ROOT.kRed)  # Set the color to red
-                crystal_ball.Draw("same")
+                frame = x.frame()
+                roohist.plotOn(frame, ROOT.RooFit.DrawOption("B"), ROOT.RooFit.FillStyle(0), ROOT.RooFit.FillColor(ROOT.kBlue))
+                cb.plotOn(frame, ROOT.RooFit.LineColor(ROOT.kBlue))
+                frame.Draw()
 
                 # Display the canvas
                 c1.Update()
                 c1.Modified()
 
                 # Optionally, save the plot as an image
-                c1.SaveAs(f"./{pdir}/CB/eta{i}_nL{j}_pull_fit.png")
+                c1.SaveAs(f"./{pdir}CB_eta{i}_nL{j}_pull_fit.png")
                     
             
             #bin in pt_reco for polynomial fit
