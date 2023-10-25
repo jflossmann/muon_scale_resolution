@@ -110,6 +110,7 @@ ROOT.gInterpreter.Declare(
         Float_t phi,
         Int_t charge,
         ROOT::VecOps::RVec<Int_t> *GenPart_status,
+        ROOT::VecOps::RVec<Int_t> *GenPart_statusFlags,
         ROOT::VecOps::RVec<Int_t> *GenPart_pdgId,
         ROOT::VecOps::RVec<Int_t> *GenPart_genPartIdxMother,
         ROOT::VecOps::RVec<Float_t> *GenPart_eta,
@@ -119,12 +120,23 @@ ROOT.gInterpreter.Declare(
         
         Float_t deltaR=0.1;
         Float_t dEta, dPhi, dR;
-        
+        Int_t mother_idx, mother_id;
+
         for(int j=0; j<GenPart_eta->size(); j++){
-            if (GenPart_status->at(j) != 1) continue;
             if (fabs(GenPart_pdgId->at(j)) != 13) continue;
-            if (GenPart_pdgId->at(GenPart_genPartIdxMother->at(j)) != 23) continue;
             if (GenPart_pdgId->at(j) * charge > 0) continue;
+            if (GenPart_status->at(j) != 1) continue;
+            if ((GenPart_statusFlags->at(j) >> 13) % 2 == 0) continue;
+
+            mother_idx = GenPart_genPartIdxMother->at(j);
+            mother_id = GenPart_pdgId->at(mother_idx);
+            
+            while (mother_id != 23){
+                mother_idx = GenPart_genPartIdxMother->at(mother_idx);
+                if (mother_idx < 0) break;
+                mother_id = GenPart_pdgId->at(mother_idx);
+            }
+            if (mother_id != 23) continue;
 
             dEta = eta - GenPart_eta->at(j);
             dPhi = phi - GenPart_phi->at(j);
@@ -250,14 +262,14 @@ def weight_zpt(ntuples, hdir, diffpt_bins, eta_bins, phi_bins):
 # function which creates ntuple files from nanoaod
 def make_ntuples(nanoAODs, datasets, datadir):
     for sample in nanoAODs:
-
         start = time.time()
         print(f"Processing {sample} samples. Number of Files: {len(nanoAODs[sample])}")
         quants = [
             "pt_Z", "mass_Z", "eta_Z", "phi_Z",
             "pt_1", "mass_1", "eta_1", "phi_1", "charge_1",
             "pt_2", "mass_2", "eta_2", "phi_2", "charge_2",
-            "genWeight", "sumwWeight", "xsec"
+            "genWeight", "sumwWeight", "xsec",
+            "nTrkLayers_1", "nTrkLayers_2"
         ]
         # load nanoAOD
         rdf = ROOT.RDataFrame("Events", nanoAODs[sample])
@@ -295,6 +307,8 @@ def make_ntuples(nanoAODs, datasets, datadir):
         rdf = rdf.Define("phi_2", "Muon_phi[ind[1]]")
         rdf = rdf.Define("charge_1", "Muon_charge[ind[0]]")
         rdf = rdf.Define("charge_2", "Muon_charge[ind[1]]")
+        rdf = rdf.Define("nTrkLayers_1", "Muon_nTrackerLayers[ind[0]]")
+        rdf = rdf.Define("nTrkLayers_2", "Muon_nTrackerLayers[ind[1]]")
 
         # Define quantities of Z boson and collect those events with 50 < m_Z < 130
         rdf = rdf.Define("p4_1", "ROOT::Math::PtEtaPhiMVector(pt_1, eta_1, phi_1, mass_1)")
@@ -324,6 +338,7 @@ def make_ntuples(nanoAODs, datasets, datadir):
                                                 phi_1,
                                                 charge_1,
                                                 &GenPart_status,
+                                                &GenPart_statusFlags,
                                                 &GenPart_pdgId,
                                                 &GenPart_genPartIdxMother,
                                                 &GenPart_eta,
@@ -334,6 +349,7 @@ def make_ntuples(nanoAODs, datasets, datadir):
                                                 phi_2,
                                                 charge_2,
                                                 &GenPart_status,
+                                                &GenPart_statusFlags,
                                                 &GenPart_pdgId,
                                                 &GenPart_genPartIdxMother,
                                                 &GenPart_eta,
