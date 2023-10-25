@@ -10,6 +10,7 @@ import python.ntuple as ntuple
 import python.scale_corr as corr
 import python.plot as plot
 import python.zmass as zmass
+import python.res_corr as rc
 
 def parse_args():
     parser = ArgumentParser(
@@ -31,6 +32,13 @@ def parse_args():
         action='store_true',
         default=False,
         help="Make scale correction"
+    )
+    parser.add_argument(
+        '-R',
+        '--res',
+        default=False,
+        action='store_true',
+        help='Make Resolution calculation'
     )
     parser.add_argument(
         '-P',
@@ -133,3 +141,10 @@ if __name__=='__main__':
         zmass.hist_zmass(ntuples_corr, eta_bins, phi_bins, mass_bins, hdir)
         zmass.fit_zmass(eta_bins, phi_bins, hdir)
         zmass.plot_zmass(eta_bins, phi_bins, hdir)
+        
+    if args.res:
+        pull_bins=np.linspace(-5,5,200)
+        abseta_bins=[0,0.2, 0.4, 0.6,0.8, 1, 1.2,1.4,1.6,1.8,2, 2.2, 2.4]
+        nl_bins=[6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5]
+        pt_bins=[25,30,35,40,50,60,80,110,150,200]
+        rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, do_plot=True)
