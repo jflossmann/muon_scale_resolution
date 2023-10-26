@@ -7,10 +7,11 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import ROOT
 import os
+import json
 from array import array
 
 
-def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pdir ,do_plot):
+def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pdir , hdir, do_plot):
     #read data
     pdir = pdir+'resolution/'
     os.makedirs(pdir, exist_ok=True)
@@ -39,24 +40,27 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
         plt.colorbar()
         plt.xlabel('|eta|')
         plt.ylabel('Number of Layers')
-        plt.savefig(f"./{pdir}nL_abseta.png")
-        plt.savefig(f"./{pdir}nL_abseta.pdf")
+        plt.savefig(f"./{pdir}/nL_abseta.png")
+        plt.savefig(f"./{pdir}/nL_abseta.pdf")
         plt.clf()
 
         #make x axis for polynom plot later
         x_ax=np.linspace(min(pt_bins),max(pt_bins),200)
 
-    #iterate over bins to fill histogram
-    fit_par_pull=[]
+    
+    fit_results={"pull":{}, "poly":{}}
     hist_std=[]
     hist_std_err=[]
 
     #iterate over eta bins
     for i in tqdm(range(len(abseta_bins)-1)):
         
+        for f in fit_results:
+            fit_results[f]["eta_"+str(i)]={}
+
         hist_std.append([])
         hist_std_err.append([])
-        fit_par_pull.append([])
+        
 
         eta_1_filter=(abseta_bins[i]<df["eta_1"]) & (df["eta_1"]<=abseta_bins[i+1])
         eta_2_filter=(abseta_bins[i]<df["eta_2"]) & (df["eta_2"]<=abseta_bins[i+1])
@@ -66,6 +70,10 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
 
         #iterate over pt bins
         for j in range(len(nl_bins)-1):
+
+            for f in fit_results:
+                fit_results[f]["eta_"+str(i)]["nL_"+str(j)]={}
+
             hist_std[i].append([])
             hist_std_err[i].append([])
 
@@ -84,8 +92,6 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
             std=np.std(R)
             pull=(R-np.mean(R))/std
             pull_hist=np.histogram(pull, bins=pull_bins)[0]
-
-
 
             # Create a ROOT TH1 object
             hist = ROOT.TH1D("hist", "PullHistogram", len(pull_bins) - 1, pull_bins)
@@ -115,9 +121,11 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
             fit_parameters = [mean.getVal(), sigma.getVal(), n.getVal(), alpha.getVal()]
             parameter_errors = [mean.getError(), sigma.getError(), n.getError(), alpha.getError()]
 
-            # Print the fit results
+            # save the fit results
+
             for k, (param, error) in enumerate(zip(fit_parameters, parameter_errors)):
-                print(f"Parameter {i}: {param} +/- {error}")
+                #print(f"Parameter {k}: {param} +/- {error}")
+                fit_results["pull"]["eta_"+str(i)]["nL_"+str(j)][f"Parameter {k}"]={"value":param, "error":error}
             
             if do_plot:
                 # Create a canvas for plotting
@@ -171,7 +179,8 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
 
             # Print the fit results
             for k, (param, error) in enumerate(zip(fit_parameters, parameter_errors)):
-                print(f"Parameter {i}: {param} +/- {error}")
+                #print(f"Parameter {k}: {param} +/- {error}")
+                fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)][f"Parameter {k}"]={"value":param, "error":error}
             
             if do_plot:
             # Create a canvas for plotting
@@ -191,4 +200,8 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
 
                 # Optionally, save the plot as an image
                 c1.SaveAs(f"./{pdir}pol_fits/eta{i}_nL{j}.png")
-            
+
+    #save the fit results as json file
+    json_object=json.dumps(fit_results, indent=4)
+    with open(f"{hdir}/fit_results_res.json", "w") as outfile:
+        outfile.write(json_object)  
