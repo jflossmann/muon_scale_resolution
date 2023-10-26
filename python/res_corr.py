@@ -7,13 +7,18 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import ROOT
 import os
+from array import array
 
 
 def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pdir ,do_plot):
     #read data
     pdir = pdir+'resolution/'
     os.makedirs(pdir, exist_ok=True)
+    if do_plot:
+        os.makedirs(pdir+'CB_fits/', exist_ok=True)
+        os.makedirs(pdir+'pol_fits/', exist_ok=True)
     ROOT.gROOT.SetBatch(1)
+    ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
     file=uproot.open(ntuples_gen)
     tree=file["Events"]
     variables=tree.keys()
@@ -44,11 +49,13 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
     #iterate over bins to fill histogram
     fit_par_pull=[]
     hist_std=[]
+    hist_std_err=[]
 
     #iterate over eta bins
     for i in tqdm(range(len(abseta_bins)-1)):
         
         hist_std.append([])
+        hist_std_err.append([])
         fit_par_pull.append([])
 
         eta_1_filter=(abseta_bins[i]<df["eta_1"]) & (df["eta_1"]<=abseta_bins[i+1])
@@ -60,6 +67,7 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
         #iterate over pt bins
         for j in range(len(nl_bins)-1):
             hist_std[i].append([])
+            hist_std_err[i].append([])
 
 
             nl_1_filter=(nl_bins[j]<df_e1["nTrkLayers_1"]) & (df_e1["nTrkLayers_1"]<=nl_bins[j+1])
@@ -124,59 +132,63 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
                 c1.Modified()
 
                 # Optionally, save the plot as an image
-                c1.SaveAs(f"./{pdir}CB_eta{i}_nL{j}_pull_fit.png")
+                c1.SaveAs(f"./{pdir}CB_fits/eta{i}_nL{j}.png")
                     
             
-            #bin in pt_reco for polynomial fit
-            #for k in range(len(pt_bins)-1):
-#                pt_1_filter=(pt_bins[k]<df_en1["pt_1"]) & (df_en1["pt_1"]<=pt_bins[k+1])
- #               pt_2_filter=(pt_bins[k]<df_en2["pt_2"]) & (df_en2["pt_2"]<=pt_bins[k+1])
-#
- #               df_enp1=df_en1[pt_1_filter]
-  #              df_enp2=df_en2[pt_2_filter]
-#
- #               R_1=df_enp1["R_1"]
-  #              R_2=df_enp2["R_2"]
-   #             R=pd.concat([R_1,R_2])
-    #            hist_std[i][j].append(np.std(R))
-     #       
-      #      poly_hist=np.histogram(pull, bins=pull_bins)[0]
-       #     hist = ROOT.TH1D("hist", "PolyHistogram", len(pt_bins) - 1, pt_bins)
-        #    for k, value in enumerate(pull_hist):
-         #       hist.SetBinContent(k+1, value)
-#
- #           # Define the second-order polynomial function
-  #          polynomial = ROOT.TF1("polynomial", "[0] + [1]*x + [2]*x*x")
-#
- #           # Set initial parameter values
-  #          polynomial.SetParameter(0, 10.0)  # Coefficient for the constant term
-   #         polynomial.SetParameter(1, 2.0)   # Coefficient for the linear term
-    #        polynomial.SetParameter(2, 0.5)   # Coefficient for the quadratic term
-#
- #           # Fit the histogram with the polynomial function
-  #          hist.Fit("polynomial")
-   #         # Get the fit results
-    #        fit_parameters = [polynomial.GetParameter(i) for i in range(3)]
-     #       parameter_errors = [polynomial.GetParError(i) for i in range(3)]
-#
- #           # Print the fit results
-  #          for k, (param, error) in enumerate(zip(fit_parameters, parameter_errors)):
-   #             print(f"Parameter {i}: {param} +/- {error}")
-    #        
-     #       if do_plot:
-      #      # Create a canvas for plotting
-       #         c1 = ROOT.TCanvas("c1", "Fitted Histogram", 800, 600)
-#
- #               # Plot the histogram
-  #              hist.Draw()
-#
- #               # Plot the fitted function
-  #              polynomial.SetLineColor(ROOT.kRed)  # Set the color to red
-   #             polynomial.Draw("same")
-#
- #               # Display the canvas
-  #              c1.Update()
-   #             c1.Modified()
-#
- #               # Optionally, save the plot as an image
-  #              c1.SaveAs(f"./{pdir}/Poly/histogram_fit.png")
+            # bin in pt_reco for polynomial fit
+            for k in range(len(pt_bins)-1):
+                pt_1_filter=(pt_bins[k]<df_en1["pt_1"]) & (df_en1["pt_1"]<=pt_bins[k+1])
+                pt_2_filter=(pt_bins[k]<df_en2["pt_2"]) & (df_en2["pt_2"]<=pt_bins[k+1])
+
+                df_enp1=df_en1[pt_1_filter]
+                df_enp2=df_en2[pt_2_filter]
+
+                R_1=df_enp1["R_1"]
+                R_2=df_enp2["R_2"]
+                R=pd.concat([R_1,R_2])
+                if not len(R) == 0:
+                    hist_std[i][j].append(np.std(R))
+                    hist_std_err[i][j].append(np.std(R)/np.sqrt(2*len(R)))
+           
+            hist = ROOT.TH1D("hist", "PolyHistogram", len(pt_bins) - 1, array('d', pt_bins))
+            for k, value in enumerate(hist_std[i][j]):
+                hist.SetBinContent(k+1, value)
+                hist.SetBinError(k+1, hist_std_err[i][j][k])
+
+            # Define the second-order polynomial function
+            polynomial = ROOT.TF1("polynomial", "[0] + [1]*x + [2]*x*x")
+
+            # Set initial parameter values
+            polynomial.SetParameter(0, 0.01)  # Coefficient for the constant term
+            polynomial.SetParameter(1, 5e-5)   # Coefficient for the linear term
+            polynomial.SetParameter(2, 5e-5)   # Coefficient for the quadratic term
+
+            # Fit the histogram with the plynomial function
+            hist.Fit("polynomial")
+            # Get the fit results
+            fit_parameters = [polynomial.GetParameter(i) for i in range(3)]
+            parameter_errors = [polynomial.GetParError(i) for i in range(3)]
+
+            # Print the fit results
+            for k, (param, error) in enumerate(zip(fit_parameters, parameter_errors)):
+                print(f"Parameter {i}: {param} +/- {error}")
+            
+            if do_plot:
+            # Create a canvas for plotting
+                c1 = ROOT.TCanvas("c1", "Fitted Histogram", 800, 600)
+
+                # Plot the histogram
+                hist.SetMarkerStyle(ROOT.kFullCircle)
+                hist.Draw("ep")
+
+                # Plot the fitted function
+                polynomial.SetLineColor(ROOT.kRed)  # Set the color to red
+                polynomial.Draw("same")
+
+                # Display the canvas
+                #c1.Update()
+                #c1.Modified()
+
+                # Optionally, save the plot as an image
+                c1.SaveAs(f"./{pdir}pol_fits/eta{i}_nL{j}.png")
+            
