@@ -297,12 +297,14 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot):
     df_new2["mass_Z_smeared_Dori"]=np.sqrt( 2*df_new2.genpt_1_smeared*df_new2.genpt_2_smeared*(np.cosh(df_new2.eta_1-df_new2.eta_2)-np.cos(df_new2.phi_1-df_new2.phi_2)) )
 
     if do_plot:
-        plt.hist(df_new2["mass_Z_smeared_Jost"],bins=200, histtype="step", range=[60,120], label="smeared_jost")
-        plt.hist(df_new2["mass_Z_smeared_Dori"],bins=200,histtype="step", range=[60,120], label="smeared_dori")
-        plt.hist(df_new2["mass_Z"],bins=200, histtype="step", range=[60,120], label="MC_reco")
+        #plt.hist(df_new2["mass_Z_smeared_Jost"],bins=500, histtype="step",density=True, label="smeared_jost")
+        plt.hist(df_new2["mass_Z_smeared_Dori"],bins=500,histtype="step",density=True, label="smeared")
+        plt.hist(df_new2["mass_Z"],bins=500, histtype="step", density=True, label="MC_reco")
         plt.legend()
-        plt.savefig(f"{pdir}Z_mass_comparison.png")
         plt.xlabel("M_µµ (GeV)")
+        plt.savefig(f"{pdir}Z_mass_comparison.png")
+        plt.savefig(f"{pdir}Z_mass_comparison.pdf")
+        
         plt.clf()
 
     #save data
