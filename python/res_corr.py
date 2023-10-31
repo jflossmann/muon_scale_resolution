@@ -1,7 +1,9 @@
 import uproot
-#import warnings
-#warnings.simplefilter(action='ignore', category=UserWarning)
+import warnings
+warnings.simplefilter(action='ignore', category=UserWarning)
+
 import pandas as pd
+pd.set_option('mode.chained_assignment', None)
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -68,7 +70,7 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
         df_e1=df[eta_1_filter]
         df_e2=df[eta_2_filter]
 
-        #iterate over pt bins
+        #iterate over nl bins
         for j in range(len(nl_bins)-1):
 
             for f in fit_results:
@@ -118,14 +120,15 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
             roohist = ROOT.RooDataHist("roohist", "", ROOT.RooArgSet(x), hist)
             fitResult = cb.fitTo(roohist, ROOT.RooFit.AsymptoticError(True), ROOT.RooFit.PrintEvalErrors(-1))
 
-            fit_parameters = [mean.getVal(), sigma.getVal(), n.getVal(), alpha.getVal()]
-            parameter_errors = [mean.getError(), sigma.getError(), n.getError(), alpha.getError()]
+            fit_parameters = [mean.getVal(), sigma.getVal()*2, n.getVal(), alpha.getVal()]
+            parameter_errors = [mean.getError(), sigma.getError()*2, n.getError(), alpha.getError()]
 
             # save the fit results
 
             for k, (param, error) in enumerate(zip(fit_parameters, parameter_errors)):
                 #print(f"Parameter {k}: {param} +/- {error}")
                 fit_results["pull"]["eta_"+str(i)]["nL_"+str(j)][f"Parameter {k}"]={"value":param, "error":error}
+                
             
             if do_plot:
                 # Create a canvas for plotting
@@ -143,10 +146,10 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
                 c1.SaveAs(f"./{pdir}CB_fits/eta{i}_nL{j}.png")
                     
             
-            # bin in pt_reco for polynomial fit
+            # bin in pt_gen for polynomial fit
             for k in range(len(pt_bins)-1):
-                pt_1_filter=(pt_bins[k]<df_en1["pt_1"]) & (df_en1["pt_1"]<=pt_bins[k+1])
-                pt_2_filter=(pt_bins[k]<df_en2["pt_2"]) & (df_en2["pt_2"]<=pt_bins[k+1])
+                pt_1_filter=(pt_bins[k]<df_en1["genpt_1"]) & (df_en1["genpt_1"]<=pt_bins[k+1])
+                pt_2_filter=(pt_bins[k]<df_en2["genpt_2"]) & (df_en2["genpt_2"]<=pt_bins[k+1])
 
                 df_enp1=df_en1[pt_1_filter]
                 df_enp2=df_en2[pt_2_filter]
@@ -202,6 +205,110 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
                 c1.SaveAs(f"./{pdir}pol_fits/eta{i}_nL{j}.png")
 
     #save the fit results as json file
+    fit_results["bins"]={"abseta":list(abseta_bins), "nl": list(nl_bins)}
+
+
     json_object=json.dumps(fit_results, indent=4)
     with open(f"{hdir}/fit_results_res.json", "w") as outfile:
         outfile.write(json_object)  
+
+
+
+def apply_res_corr(ntuples_gen, hdir, pdir, do_plot):
+
+    pdir = pdir+'resolution/'
+    #open fit_result file
+    #open json, read as dict
+    with open(f"{hdir}/fit_results_res.json", 'r') as openfile: fit_results = json.load(openfile)
+    
+    #get bins from
+    abseta_bins=fit_results["bins"]["abseta"]
+    nl_bins=fit_results["bins"]["nl"]
+
+    #open data
+    file=uproot.open(ntuples_gen)
+    tree=file["Events"]
+    variables=tree.keys()
+    df=tree.arrays(variables, library="pd")
+
+    df_new1=pd.DataFrame()
+
+    #loop over bins, fill df_new1
+    
+    print("getting corrections for pt 1")
+    for i in tqdm(range(len(abseta_bins)-1)):
+        eta_1_filter=(abseta_bins[i]<df["eta_1"]) & (df["eta_1"]<=abseta_bins[i+1])
+        df_e1=df[eta_1_filter]
+
+        for j in range(len(nl_bins)-1):
+            nl_1_filter=(nl_bins[j]<df_e1["nTrkLayers_1"]) & (df_e1["nTrkLayers_1"]<=nl_bins[j+1])
+            df_en1=df_e1[nl_1_filter]
+
+            if len(df_en1)>0:
+                #get CB sigma for current bin:
+                
+                CB_sigma=fit_results["pull"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 1"]["value"]
+                #get polynomial fit parameters
+                poly_par=np.array([fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 0"]["value"],
+                                fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 1"]["value"],
+                                fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 2"]["value"]])
+                pt1=df_en1["genpt_1"]
+                #calc correction
+
+                #calc std from parabula
+                std1=pt1*pt1*poly_par[2]+pt1*poly_par[1]+poly_par[0]
+                #smear pt
+                
+                df_en1["genpt_1_smeared"]=np.array(df_en1["pt_1"]) + np.random.normal(0, abs(std1), size=len(df_en1)) #+ np.random.normal(0, abs(1-CB_sigma), size=len(df_en1))
+
+                df_new1=pd.concat([df_new1, df_en1])
+
+    df_new2=pd.DataFrame()
+    df=df_new1
+    print("getting corrections for pt 2")
+    for i in tqdm(range(len(abseta_bins)-1)):
+        eta_2_filter=(abseta_bins[i]<df["eta_2"]) & (df["eta_2"]<=abseta_bins[i+1])
+        df_e2=df[eta_2_filter]
+
+        for j in range(len(nl_bins)-1):
+            nl_2_filter=(nl_bins[j]<df_e2["nTrkLayers_2"]) & (df_e2["nTrkLayers_2"]<=nl_bins[j+1])
+            df_en2=df_e2[nl_2_filter]
+
+            if len(df_en2)>0:
+                #get CB sigma for current bin:
+                CB_sigma=fit_results["pull"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 1"]["value"]
+                #get polynomial fit parameters
+                poly_par=np.array([fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 0"]["value"],
+                                fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 1"]["value"],
+                                fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 2"]["value"]] )
+                
+                pt2=df_en2["genpt_2"]
+                #calc correction
+                #calc std from parabula
+                std2=pt2*pt2*poly_par[2]+pt2*poly_par[1]+poly_par[0]
+
+                #smear pt
+                df_en2["genpt_2_smeared"]=np.array(df_en2["pt_2"]) + np.random.normal(0, abs(std2), size=len(df_en2)) #+ np.random.normal(0, abs(1-CB_sigma), size=len(df_en2))
+                df_new2=pd.concat([df_new2, df_en2])
+    
+
+    #calculate invarriant mass
+    df_new2["mass_Z_smeared_Jost"]=np.sqrt( 2*df_new2.smearedgenpt_1*df_new2.smearedgenpt_2*(np.cosh(df_new2.eta_1-df_new2.eta_2)-np.cos(df_new2.phi_1-df_new2.phi_2)) )
+    df_new2["mass_Z_smeared_Dori"]=np.sqrt( 2*df_new2.genpt_1_smeared*df_new2.genpt_2_smeared*(np.cosh(df_new2.eta_1-df_new2.eta_2)-np.cos(df_new2.phi_1-df_new2.phi_2)) )
+
+    if do_plot:
+        plt.hist(df_new2["mass_Z_smeared_Jost"],bins=200, histtype="step", range=[60,120], label="smeared_jost")
+        plt.hist(df_new2["mass_Z_smeared_Dori"],bins=200,histtype="step", range=[60,120], label="smeared_dori")
+        plt.hist(df_new2["mass_Z"],bins=200, histtype="step", range=[60,120], label="MC_reco")
+        plt.legend()
+        plt.savefig(f"{pdir}Z_mass_comparison.png")
+        plt.xlabel("M_µµ (GeV)")
+        plt.clf()
+
+    #save data
+    print(f"saving corrected gen to {ntuples_gen.replace('.root', '_corr.root')}")
+    data={key: df_new2[key].values for key in df_new2.columns}
+    rdf = ROOT.RDF.MakeNumpyDataFrame(data)
+    rdf.Snapshot("Events", ntuples_gen.replace('.root', '_corr.root'))
+    print("done")
+
