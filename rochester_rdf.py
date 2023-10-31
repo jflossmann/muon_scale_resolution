@@ -148,3 +148,4 @@ if __name__=='__main__':
         nl_bins=[6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5]
         pt_bins=[25,30,35,40,50,60,80,110,150,200]
         rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
+        rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
