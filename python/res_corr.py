@@ -123,8 +123,8 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
     df_new2["mass_Z_smeared_Dori"]=np.sqrt( 2*df_new2.genpt_1_smeared*df_new2.genpt_2_smeared*(np.cosh(df_new2.eta_1-df_new2.eta_2)-np.cos(df_new2.phi_1-df_new2.phi_2)) )
 
     if do_plot:
-        bins=100
-        rang=[80,100]
+        bins=300
+        rang=[50,130]
         fig, (ax0,ax1)=plt.subplots(2,1, gridspec_kw={"height_ratios":[3,1] })
         plt.subplots_adjust(wspace=0, hspace=0)
         h_s=ax0.hist(df_new2["mass_Z_smeared_Dori"],bins=bins, range=rang, histtype="step",density=True, label="smeared")
