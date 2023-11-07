@@ -217,7 +217,7 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
 
 
 def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
-    use_CB_smear=True
+    use_CB_smear=False
 
     pdir = pdir+'resolution/'
     #open fit_result file
@@ -407,8 +407,6 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
     print("done")
 
     
-
-
 
 def make_CB_plot(hdir,pdir):
     with open(f"{hdir}/fit_results_res.json", 'r') as openfile: fit_results = json.load(openfile)
