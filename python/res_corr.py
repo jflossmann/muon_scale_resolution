@@ -27,6 +27,7 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
     variables=tree.keys()
     df=tree.arrays(variables, library="pd")
 
+
     #calculate abseta
     df["abseta_1"]=np.abs(df.eta_1)
     df["abseta_2"]=np.abs(df.eta_2)
@@ -38,7 +39,7 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
 
     #make histogram of distribution in abseta, nl
     if do_plot:
-        plt.hist2d(df["abseta_1"],df["nTrkLayers_1"],bins=[abseta_bins, nl_bins])
+        plt.hist2d(pd.concat([df["abseta_1"],df["abseta_2"]]),pd.concat([df["nTrkLayers_1"],df["nTrkLayers_2"]]),bins=[abseta_bins, nl_bins])
         plt.colorbar()
         plt.xlabel('|eta|')
         plt.ylabel('Number of Layers')
@@ -64,8 +65,8 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
         hist_std_err.append([])
         
 
-        eta_1_filter=(abseta_bins[i]<df["eta_1"]) & (df["eta_1"]<=abseta_bins[i+1])
-        eta_2_filter=(abseta_bins[i]<df["eta_2"]) & (df["eta_2"]<=abseta_bins[i+1])
+        eta_1_filter=(abseta_bins[i]<df["abseta_1"]) & (df["abseta_1"]<=abseta_bins[i+1])
+        eta_2_filter=(abseta_bins[i]<df["abseta_2"]) & (df["abseta_2"]<=abseta_bins[i+1])
 
         df_e1=df[eta_1_filter]
         df_e2=df[eta_2_filter]
@@ -213,10 +214,122 @@ def get_res_correction(ntuples_gen, pull_bins, abseta_bins, nl_bins, pt_bins, pd
         outfile.write(json_object)  
     
     
-
-
-
 def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
+    use_CB_smear=True
+    pdir = pdir+'resolution/'
+    #open fit_result file
+    #open json, read as dict
+    with open(f"{hdir}/fit_results_res.json", 'r') as openfile: fit_results = json.load(openfile)
+    
+    #get bins from
+    abseta_bins=fit_results["bins"]["abseta"]
+    nl_bins=fit_results["bins"]["nl"]
+
+    #open data
+    file=uproot.open(ntuples_gen)
+    tree=file["Events"]
+    variables=tree.keys()
+    df=tree.arrays(variables, library="pd")
+    df["abseta_1"]=np.abs(df["eta_1"])
+    df["abseta_2"]=np.abs(df["eta_2"])
+    df["genpt_1_smeared"]=df["genpt_1"]
+    df["genpt_2_smeared"]=df["genpt_2"]
+
+    print("apply corrections")
+    for i in tqdm(range(len(abseta_bins)-1)):
+        eta_1_filter=(abseta_bins[i]<df["abseta_1"]) & (df["abseta_1"]<=abseta_bins[i+1])
+        df_e1=df[eta_1_filter]
+        eta_2_filter=(abseta_bins[i]<df["abseta_2"]) & (df["abseta_2"]<=abseta_bins[i+1])
+        df_e2=df[eta_2_filter]
+
+        for j in range(len(nl_bins)-1):
+            nl_1_filter=(nl_bins[j]<df_e1["nTrkLayers_1"]) & (df_e1["nTrkLayers_1"]<=nl_bins[j+1])
+            df_en1=df_e1[nl_1_filter]
+            nl_2_filter=(nl_bins[j]<df_e2["nTrkLayers_2"]) & (df_e2["nTrkLayers_2"]<=nl_bins[j+1])
+            df_en2=df_e2[nl_2_filter]
+
+            l1=len(df_en1)
+            l2=len(df_en2)
+
+            #get polynomial fit parameters
+            if l1>2 or l2>2:
+                poly_par=np.array([fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 0"]["value"],
+                                    fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 1"]["value"],
+                                    fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 2"]["value"]])
+            
+                #calc std from parabula
+                pt1=np.array(df_en1.genpt_1)
+                std1=pt1*pt1*poly_par[2]+pt1*poly_par[1]+poly_par[0]
+                pt2=np.array(df_en2.genpt_2)
+                std2=pt2*pt2*poly_par[2]+pt2*poly_par[1]+poly_par[0]
+
+                std1[std1<0]=0
+                std2[std2<0]=0
+                
+                if use_CB_smear:
+                    #get CB sigma for current bin:
+                    CB_sigma=fit_results["pull"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 1"]["value"] / 2.
+
+                    df.loc[eta_1_filter & nl_1_filter, "genpt_1_smeared"]=pt1 + pt1*np.random.normal(0, std1*CB_sigma, size=len((pt1)))
+                    df.loc[eta_2_filter & nl_2_filter, "genpt_2_smeared"]=pt2 + pt2*np.random.normal(0, std2*CB_sigma, size=len((pt2)))
+                else:
+                    df.loc[eta_1_filter & nl_1_filter, "genpt_1_smeared"]=pt1 + pt1*np.random.normal(0, std1, size=len(pt1))
+                    df.loc[eta_2_filter & nl_2_filter, "genpt_2_smeared"]=pt2 + pt2*np.random.normal(0, std2, size=len(pt2))
+
+
+    df["mass_Z_smeared"]=np.sqrt( 2*df.genpt_1_smeared*df.genpt_2_smeared*(np.cosh(df.geneta_1-df.geneta_2)-np.cos(df.genphi_1-df.genphi_2)) )
+
+    if do_plot:
+        bins=200
+        rang=[50,130]
+        fig, (ax0,ax1)=plt.subplots(2,1, gridspec_kw={"height_ratios":[3,1] })
+        plt.subplots_adjust(wspace=0, hspace=0)
+        h_s=ax0.hist(df["mass_Z_smeared"],bins=bins, range=rang, histtype="step",density=True, label="gen_smeared")
+        h_r=ax0.hist(df["mass_Z"],bins=bins, histtype="step", range=rang, density=True, label="MC_reco")
+        ax0.hist(df["genmass_Z"],bins=bins, histtype="step", range=rang, density=True, label="MC_gen",color="k")
+        
+        #chi2=np.sum((h_r[0]-h_s[0])**2/h_s[0])
+        ndf=bins
+        #ax0.annotate(f"χ²/NDF = {round(chi2,6)}/{ndf}",xy=(100,400), xycoords="figure pixels")
+        ax0.set_xlim(left=rang[0],right=rang[1])
+        ax0.set_xticks([])
+        ax0.legend()
+        ax0.set_xlabel("M_µµ (GeV)")
+        if use_CB_smear:
+            ax0.set_title("with CB-smearing")
+        else:
+            ax0.set_title("without CB-smearing")
+        ax1.set_ylim(bottom=0.85,top=1.15)
+        ax1.set_xlim(left=rang[0],right=rang[1])
+        ax1.plot(np.linspace(rang[0],rang[1],bins),h_s[0]/h_r[0])
+        ax1.set_xlabel("M_µµ (GeV)")
+        ax1.set_ylabel("ratio")
+        ax1.grid(True)
+        #plt.savefig(f"{pdir}Z_mass_comparison.pdf")
+        if use_CB_smear:
+            plt.savefig(f"{pdir}Z_mass_comparison_wCB.png")
+        else:
+            plt.savefig(f"{pdir}Z_mass_comparison_woCB.png")
+        plt.clf()
+
+
+    #save data
+    #print(f"saving corrected gen to {ntuples_gen.replace('.root', '_corr.root')}")
+    #data={key: df[key].values for key in df.columns}
+    #rdf = ROOT.RDF.MakeNumpyDataFrame(data)
+    #rdf.Snapshot("Events", ntuples_gen.replace('.root', '_corr.root'))
+    #print("done")  
+                
+
+                
+
+   #################################################################         
+
+
+
+
+
+def apply_res_corr_bug(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
     use_CB_smear=False
 
     pdir = pdir+'resolution/'
@@ -233,24 +346,26 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
     tree=file["Events"]
     variables=tree.keys()
     df=tree.arrays(variables, library="pd")
-
+    df["abseta_1"]=np.abs(df["eta_1"])
+    df["abseta_2"]=np.abs(df["eta_2"])
     df_new1=pd.DataFrame()
 
+    plt.hist(df.eta_1,bins=50)
+    plt.savefig(f"{pdir}1")
+    plt.clf()
     #loop over bins, fill df_new1
     
     print("getting corrections for pt 1")
 
-
-
     for i in tqdm(range(len(abseta_bins)-1)):
-        eta_1_filter=(abseta_bins[i]<df["eta_1"]) & (df["eta_1"]<=abseta_bins[i+1])
+        eta_1_filter=(abseta_bins[i]<df["abseta_1"]) & (df["abseta_1"]<=abseta_bins[i+1])
         df_e1=df[eta_1_filter]
 
         for j in range(len(nl_bins)-1):
             nl_1_filter=(nl_bins[j]<df_e1["nTrkLayers_1"]) & (df_e1["nTrkLayers_1"]<=nl_bins[j+1])
             df_en1=df_e1[nl_1_filter]
 
-            if len(df_en1)>0:
+            if len(df_en1)>2:
                 
                 #get polynomial fit parameters
                 poly_par=np.array([fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 0"]["value"],
@@ -303,20 +418,26 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
                         plt.savefig(f"{pdir}binwise_pt_Distribution/abseta{i}_nL{j}_1_woCB.png")
                     
                     plt.clf()
-        
+
+       
 
     df_new2=pd.DataFrame()
     df=df_new1
+
+    plt.hist(df.eta_1,bins=50)
+    plt.savefig(f"{pdir}2")
+    plt.clf() 
+
     print("getting corrections for pt 2")
     for i in tqdm(range(len(abseta_bins)-1)):
-        eta_2_filter=(abseta_bins[i]<df["eta_2"]) & (df["eta_2"]<=abseta_bins[i+1])
+        eta_2_filter=(abseta_bins[i]<df["abseta_2"]) & (df["abseta_2"]<=abseta_bins[i+1])
         df_e2=df[eta_2_filter]
 
         for j in range(len(nl_bins)-1):
             nl_2_filter=(nl_bins[j]<df_e2["nTrkLayers_2"]) & (df_e2["nTrkLayers_2"]<=nl_bins[j+1])
             df_en2=df_e2[nl_2_filter]
 
-            if len(df_en2)>0:
+            if len(df_en2)>2:
                 
                 #get polynomial fit parameters
                 poly_par=np.array([fit_results["poly"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 0"]["value"],
@@ -335,6 +456,7 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
                     df_en2["genpt_2_smeared"]=np.array(df_en2["pt_2"]) + np.random.normal(0, abs(std2), size=len(df_en2))*CB_sigma 
                 else:
                     df_en2["genpt_2_smeared"]=np.array(df_en2["pt_2"]) + np.random.normal(0, abs(std2), size=len(df_en2))
+
                 df_new2=pd.concat([df_new2, df_en2])
 
                 if do_plot and do_binwise_plot:
@@ -365,6 +487,10 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
                         plt.savefig(f"{pdir}binwise_pt_Distribution/abseta{i}_nL{j}_2_woCB.png")
                     plt.clf()
     
+    plt.hist(df_new2.eta_1,bins=50)
+    plt.savefig(f"{pdir}3")
+    plt.clf() 
+
 
     #calculate invarriant mass
     
