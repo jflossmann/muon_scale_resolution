@@ -41,6 +41,13 @@ def parse_args():
         help='Make Resolution calculation'
     )
     parser.add_argument(
+    '-I',
+    '--iterative',
+    default=False,
+    action='store_true',
+    help='Make iterative correction'
+    )
+    parser.add_argument(
         '-P',
         '--plot',
         default=False,
@@ -149,3 +156,7 @@ if __name__=='__main__':
         pt_bins=[25,30,35,40,50,60,80,110,150,200]
         rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
         rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
+
+     if args.iterative:
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_ntuples_zPt_corr.root"
+        it.iterative_correction(samples=ntuples_corr, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
