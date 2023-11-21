@@ -11,6 +11,7 @@ import python.scale_corr as corr
 import python.plot as plot
 import python.zmass as zmass
 import python.res_corr as rc
+import python.iterative as it
 
 def parse_args():
     parser = ArgumentParser(
@@ -157,6 +158,6 @@ if __name__=='__main__':
         rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
         rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
 
-     if args.iterative:
+    if args.iterative:
         ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_ntuples_zPt_corr.root"
         it.iterative_correction(samples=ntuples_corr, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
