@@ -11,6 +11,7 @@ import python.scale_corr as corr
 import python.plot as plot
 import python.zmass as zmass
 import python.res_corr as rc
+import python.iterative as it
 
 def parse_args():
     parser = ArgumentParser(
@@ -39,6 +40,13 @@ def parse_args():
         default=False,
         action='store_true',
         help='Make Resolution calculation'
+    )
+    parser.add_argument(
+    '-I',
+    '--iterative',
+    default=False,
+    action='store_true',
+    help='Make iterative correction'
     )
     parser.add_argument(
         '-P',
@@ -147,4 +155,9 @@ if __name__=='__main__':
         abseta_bins=np.linspace(0, 2.4, 13)
         nl_bins=[6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5]
         pt_bins=[25,30,35,40,50,60,80,110,150,200]
-        rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, do_plot=True)
+        rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
+        rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
+
+    if args.iterative:
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_ntuples_zPt_corr.root"
+        it.iterative_correction(samples=ntuples_corr, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
