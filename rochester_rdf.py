@@ -76,42 +76,42 @@ if __name__=='__main__':
     charge_bins = [-2,0,2]
     mass_bins = np.linspace(75, 105, 61)
     
-    datadir = "/ceph/jdriesch/rochester/"
+    datadir = "/ceph/jdriesch/rochester/ntuples/"
     nanoAODs = ntuple.yaml_loader('data/nanoAODs.yaml')
     datasets = ntuple.yaml_loader('data/datasets.yaml')
     samples_to_plot = ["DATA", "SIG", "GEN"]
     ntuples = {
-        'DATA': {'DATA': f"{datadir}DATA_ntuples.root"},
-        'SIG': {'SIG': f"{datadir}DY_ntuples.root"},
+        'DATA': {'DATA': f"{datadir}DATA_*.root"},
+        'SIG': {'SIG': f"{datadir}DY_*.root"},
         'BKG': {            
-            'WW': f"{datadir}WW_ntuples.root",
-            'WZ': f"{datadir}WZ_ntuples.root",
-            'ZZ': f"{datadir}ZZ_ntuples.root",
-            'TT': f"{datadir}TT_ntuples.root",
+            'WW': f"{datadir}WW_*.root",
+            'WZ': f"{datadir}WZ_*.root",
+            'ZZ': f"{datadir}ZZ_*.root",
+            'TT': f"{datadir}TT_*.root",
         },
-        'GEN': {'GEN': f"{datadir}GEN_ntuples.root"}
+        'GEN': {'GEN': f"{datadir}GEN_*.root"}
     }
     ntuples_zPt = {
-        'DATA': {'DATA': f"{datadir}DATA_ntuples_zPt.root"},
-        'SIG': {'SIG': f"{datadir}DY_ntuples_zPt.root"},
+        'DATA': {'DATA': f"{datadir}DATA_zPt.root"},
+        'SIG': {'SIG': f"{datadir}DY_zPt.root"},
         'BKG': {
-            'WW': f"{datadir}WW_ntuples_zPt.root",
-            'WZ': f"{datadir}WZ_ntuples_zPt.root",
-            'ZZ': f"{datadir}ZZ_ntuples_zPt.root",
-            'TT': f"{datadir}TT_ntuples_zPt.root",
+            'WW': f"{datadir}WW_zPt.root",
+            'WZ': f"{datadir}WZ_zPt.root",
+            'ZZ': f"{datadir}ZZ_zPt.root",
+            'TT': f"{datadir}TT_zPt.root",
         },
-        'GEN': {'GEN': f"{datadir}GEN_ntuples_zPt.root"}
+        'GEN': {'GEN': f"{datadir}GEN_zPt.root"}
     }
     ntuples_corr = {
-        'DATA': {'DATA': f"{datadir}DATA_ntuples_zPt_corr.root"},
-        'SIG': {'SIG': f"{datadir}DY_ntuples_zPt_corr.root"},
+        'DATA': {'DATA': f"{datadir}DATA_zPt_corr.root"},
+        'SIG': {'SIG': f"{datadir}DY_zPt_corr.root"},
         'BKG': {
-            'WW': f"{datadir}WW_ntuples_zPt_corr.root",
-            'WZ': f"{datadir}WZ_ntuples_zPt_corr.root",
-            'ZZ': f"{datadir}ZZ_ntuples_zPt_corr.root",
-            'TT': f"{datadir}TT_ntuples_zPt_corr.root",
+            'WW': f"{datadir}WW_zPt_corr.root",
+            'WZ': f"{datadir}WZ_zPt_corr.root",
+            'ZZ': f"{datadir}ZZ_zPt_corr.root",
+            'TT': f"{datadir}TT_zPt_corr.root",
         },
-        'GEN': {'GEN': f"{datadir}GEN_ntuples_zPt.root"}
+        'GEN': {'GEN': f"{datadir}GEN_zPt.root"}
     }
 
     sf_path = 'data/scaleFactors/Run2/UL/2018/2018_Z/Efficiencies_muon_generalTracks_Z_Run2018_UL_'
@@ -155,7 +155,7 @@ if __name__=='__main__':
         abseta_bins=np.linspace(0, 2.4, 13)
         nl_bins=[6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5]
         pt_bins=[25,30,35,40,50,60,80,110,150,200]
-        rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
+        #rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
         rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
 
     if args.iterative:
