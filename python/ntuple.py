@@ -2,6 +2,8 @@ import ROOT
 from array import array
 import yaml
 import time
+from multiprocessing import Pool, RLock
+from tqdm import tqdm
 
 # function in c++ code. Finds indices of muons closest to z boson mass
 ROOT.gInterpreter.Declare("""
@@ -164,7 +166,7 @@ def hist_zpt(ntuples, pt_bins, hdir):
         for sample in ntuples[typ]:
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
 
-            h = rdf.Histo1D((f"h_Zboson_pt_{sample}", "", len(pt_bins)-1, array('f', pt_bins)), "pt_Z")
+            h = rdf.Histo1D((f"h_Zboson_pt_{sample}", "", len(pt_bins)-1, array('f', pt_bins)), "pt_Z", 'genWeight')
             h.Scale(1./h.Integral())
             hists.append(h)
 
@@ -204,7 +206,11 @@ def weight_zpt(ntuples, hdir, diffpt_bins, eta_bins, phi_bins):
     for typ in ntuples:
         for sample in ntuples[typ]:
             print(sample)
+            sampleyaml = yaml_loader(ntuples[typ][sample].replace('_*.root', '.yaml'))
+
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
+            rdf = rdf.Define('sumwWeight', str(sampleyaml['genweight']))
+            rdf = rdf.Define('xsec', str(sampleyaml['xsec']))
             if typ == "DATA":
                 rdf = rdf.Define("zPtWeight", "1")
                 rdf = rdf.Define("sf_id_1", "1").Define("sf_id_2", "1")
@@ -253,7 +259,7 @@ def weight_zpt(ntuples, hdir, diffpt_bins, eta_bins, phi_bins):
                 rdf = rdf.Define("smearedgenpt_2", "genpt_2 * (1 + (float)(gaus()) * h_genreco_2->GetBinError(h_genreco_2->GetXaxis()->FindBin(eta_2), h_genreco_2->GetYaxis()->FindBin(phi_2)))")
                 
             quants = list(rdf.GetColumnNames())
-            rdf.Snapshot("Events", ntuples[typ][sample].replace(".root", "_zPt.root"), quants)
+            rdf.Snapshot("Events", ntuples[typ][sample].replace("*.root", "zPt.root"), quants)
 
     return
 
@@ -262,135 +268,162 @@ def weight_zpt(ntuples, hdir, diffpt_bins, eta_bins, phi_bins):
 # function which creates ntuple files from nanoaod
 def make_ntuples(nanoAODs, datasets, datadir):
     for sample in nanoAODs:
+
+        sum_genweights = 0
+
         start = time.time()
         print(f"Processing {sample} samples. Number of Files: {len(nanoAODs[sample])}")
-        quants = [
+        args = [(datasets, sample, _file, number, datadir) for number, _file in enumerate(nanoAODs[sample])]
+        nthreads = 8
+
+        pool = Pool(nthreads, initargs=(RLock,), initializer=tqdm.set_lock)
+        for genweight in tqdm(
+            pool.imap_unordered(job_wrapper, args),
+            total=len(args),
+            desc="Total progess",
+            dynamic_ncols=True,
+            leave=True
+        ): sum_genweights += genweight
+
+        datasets[sample]['genweight'] = sum_genweights
+
+        with open(datadir + sample + '.yaml', "w") as f:
+            yaml.dump(datasets[sample], f)
+        if sample == 'DY':
+            with open(datadir + 'GEN.yaml', 'w') as f:
+                yaml.dump(datasets[sample], f)
+
+        # for a in args:
+        #     weight = job_wrapper(a)
+        end = time.time()
+        print(f"Finished processing of {sample} samples in {round(end-start,1)} s.")
+
+
+def job_wrapper(args):
+    return process_ntuples(*args)
+
+
+def process_ntuples(datasets, sample, _file, number, datadir):
+    quants = [
             "pt_Z", "mass_Z", "eta_Z", "phi_Z",
             "pt_1", "mass_1", "eta_1", "phi_1", "charge_1",
             "pt_2", "mass_2", "eta_2", "phi_2", "charge_2",
-            "genWeight", "sumwWeight", "xsec",
+            "genWeight",
             "nTrkLayers_1", "nTrkLayers_2"
         ]
-        # load nanoAOD
-        rdf = ROOT.RDataFrame("Events", nanoAODs[sample])
+    # load nanoAOD
+    rdf = ROOT.RDataFrame("Events", _file)
 
-        if sample=='DATA':
-            rdf = rdf.Define("genWeight", "1")
-        #else:
-            #rdf = rdf.Define("genWeight", "Generator_weight")
+    if sample=='DATA':
+        rdf = rdf.Define("genWeight", "1")
 
-        genweight = rdf.Sum("genWeight").GetValue()
-        rdf = rdf.Define("sumwWeight", f"1./{genweight}")
+    genweight = rdf.Sum("genWeight").GetValue()
+    
+    # only collect events w/ >1 muon and find muon pair closest to z mass. Muon1 is always charge -1 and muon2 always +1
+    rdf = rdf.Filter("Muon_pt.size() > 1")
+    rdf = rdf.Define("ind", """ROOT::VecOps::RVec<Int_t> (get_indices(
+                                nMuon,
+                                &Muon_pt,
+                                &Muon_eta,
+                                &Muon_phi,
+                                &Muon_mass,
+                                &Muon_tkRelIso,
+                                &Muon_mediumId,
+                                &Muon_charge
+                                ))""")
+    rdf = rdf.Define("ind0", "ind[0]")
+    rdf = rdf.Define("ind1", "ind[1]")
+    rdf = rdf.Filter("ind0 + ind1 > 0")
+    rdf = rdf.Define("pt_1", "Muon_pt[ind[0]]")
+    rdf = rdf.Define("pt_2", "Muon_pt[ind[1]]")
+    rdf = rdf.Define("mass_1", "Muon_mass[ind[0]]")
+    rdf = rdf.Define("mass_2", "Muon_mass[ind[1]]")
+    rdf = rdf.Define("eta_1", "Muon_eta[ind[0]]")
+    rdf = rdf.Define("eta_2", "Muon_eta[ind[1]]")
+    rdf = rdf.Define("phi_1", "Muon_phi[ind[0]]")
+    rdf = rdf.Define("phi_2", "Muon_phi[ind[1]]")
+    rdf = rdf.Define("charge_1", "Muon_charge[ind[0]]")
+    rdf = rdf.Define("charge_2", "Muon_charge[ind[1]]")
+    rdf = rdf.Define("nTrkLayers_1", "Muon_nTrackerLayers[ind[0]]")
+    rdf = rdf.Define("nTrkLayers_2", "Muon_nTrackerLayers[ind[1]]")
+
+    # Define quantities of Z boson and collect those events with 50 < m_Z < 130
+    rdf = rdf.Define("p4_1", "ROOT::Math::PtEtaPhiMVector(pt_1, eta_1, phi_1, mass_1)")
+    rdf = rdf.Define("p4_2", "ROOT::Math::PtEtaPhiMVector(pt_2, eta_2, phi_2, mass_2)")
+    rdf = rdf.Define("p4_Z", "p4_1 + p4_2")
+    rdf = rdf.Define("pt_Z", "p4_Z.Pt()")
+    rdf = rdf.Define("eta_Z", "p4_Z.Eta()")
+    rdf = rdf.Define("mass_Z", "p4_Z.M()")
+    rdf = rdf.Define("phi_Z", "p4_Z.Phi()")
+    
+    rdf = rdf.Filter("mass_Z > 50 && mass_Z < 130")
+
+    # make output with interesting data
+    rdf.Snapshot("Events", f"{datadir+sample}_{number}.root", quants)
+    
+    if sample=="DY":
+        start = time.time()
+        sample = 'GEN'
+        print(f"Calculation of Gen quantities for GEN samples.")
+        # perform gen delta R matching and collect corresponding events and gen quantities
+        rdf = rdf.Define("genind_1", """muon_genmatch(
+                                            eta_1,
+                                            phi_1,
+                                            charge_1,
+                                            &GenPart_status,
+                                            &GenPart_statusFlags,
+                                            &GenPart_pdgId,
+                                            &GenPart_genPartIdxMother,
+                                            &GenPart_eta,
+                                            &GenPart_phi
+                                            )""")
+        rdf = rdf.Define("genind_2", """muon_genmatch(
+                                            eta_2,
+                                            phi_2,
+                                            charge_2,
+                                            &GenPart_status,
+                                            &GenPart_statusFlags,
+                                            &GenPart_pdgId,
+                                            &GenPart_genPartIdxMother,
+                                            &GenPart_eta,
+                                            &GenPart_phi
+                                            )""")
+        # if gen matching successfull: save information of gen event
+        rdf = rdf.Define("gen_mask", "genind_1 != -99 && genind_2 != -99 && genind_1 != genind_2")
+        rdf = rdf.Filter("gen_mask")
+
+        rdf = rdf.Define("genpt_1", "GenPart_pt[genind_1]")
+        rdf = rdf.Define("genpt_2", "GenPart_pt[genind_2]")
+        rdf = rdf.Define("geneta_1", "GenPart_eta[genind_1]")
+        rdf = rdf.Define("geneta_2", "GenPart_eta[genind_2]")
+        rdf = rdf.Define("genphi_1", "GenPart_phi[genind_1]")
+        rdf = rdf.Define("genphi_2", "GenPart_phi[genind_2]")
+        rdf = rdf.Define("genmass_1", "GenPart_mass[genind_1]")
+        rdf = rdf.Define("genmass_2", "GenPart_mass[genind_2]")
+        rdf = rdf.Define("gencharge_1", "- GenPart_pdgId[genind_1]/fabs(GenPart_pdgId[genind_1])")
+        rdf = rdf.Define("gencharge_2", "- GenPart_pdgId[genind_2]/fabs(GenPart_pdgId[genind_2])")
+
+        rdf = rdf.Define("genp4_1", "ROOT::Math::PtEtaPhiMVector(genpt_1, geneta_1, genphi_1, genmass_1)")
+        rdf = rdf.Define("genp4_2", "ROOT::Math::PtEtaPhiMVector(genpt_2, geneta_2, genphi_2, genmass_2)")
+        rdf = rdf.Define("genp4_Z", "genp4_1 + genp4_2")
+        rdf = rdf.Define("genpt_Z", "genp4_Z.Pt()")
+        rdf = rdf.Define("geneta_Z", "genp4_Z.Eta()")
+        rdf = rdf.Define("genmass_Z", "genp4_Z.M()")
+        rdf = rdf.Define("genphi_Z", "genp4_Z.Phi()")
+
         
-        # only collect events w/ >1 muon and find muon pair closest to z mass. Muon1 is always charge -1 and muon2 always +1
-        rdf = rdf.Filter("Muon_pt.size() > 1")
-        rdf = rdf.Define("ind", """ROOT::VecOps::RVec<Int_t> (get_indices(
-                                    nMuon,
-                                    &Muon_pt,
-                                    &Muon_eta,
-                                    &Muon_phi,
-                                    &Muon_mass,
-                                    &Muon_tkRelIso,
-                                    &Muon_mediumId,
-                                    &Muon_charge
-                                    ))""")
-        rdf = rdf.Define("ind0", "ind[0]")
-        rdf = rdf.Define("ind1", "ind[1]")
-        rdf = rdf.Filter("ind0 + ind1 > 0")
-        rdf = rdf.Define("pt_1", "Muon_pt[ind[0]]")
-        rdf = rdf.Define("pt_2", "Muon_pt[ind[1]]")
-        rdf = rdf.Define("mass_1", "Muon_mass[ind[0]]")
-        rdf = rdf.Define("mass_2", "Muon_mass[ind[1]]")
-        rdf = rdf.Define("eta_1", "Muon_eta[ind[0]]")
-        rdf = rdf.Define("eta_2", "Muon_eta[ind[1]]")
-        rdf = rdf.Define("phi_1", "Muon_phi[ind[0]]")
-        rdf = rdf.Define("phi_2", "Muon_phi[ind[1]]")
-        rdf = rdf.Define("charge_1", "Muon_charge[ind[0]]")
-        rdf = rdf.Define("charge_2", "Muon_charge[ind[1]]")
-        rdf = rdf.Define("nTrkLayers_1", "Muon_nTrackerLayers[ind[0]]")
-        rdf = rdf.Define("nTrkLayers_2", "Muon_nTrackerLayers[ind[1]]")
-
-        # Define quantities of Z boson and collect those events with 50 < m_Z < 130
-        rdf = rdf.Define("p4_1", "ROOT::Math::PtEtaPhiMVector(pt_1, eta_1, phi_1, mass_1)")
-        rdf = rdf.Define("p4_2", "ROOT::Math::PtEtaPhiMVector(pt_2, eta_2, phi_2, mass_2)")
-        rdf = rdf.Define("p4_Z", "p4_1 + p4_2")
-        rdf = rdf.Define("pt_Z", "p4_Z.Pt()")
-        rdf = rdf.Define("eta_Z", "p4_Z.Eta()")
-        rdf = rdf.Define("mass_Z", "p4_Z.M()")
-        rdf = rdf.Define("phi_Z", "p4_Z.Phi()")
-        
-        rdf = rdf.Filter("mass_Z > 50 && mass_Z < 130")
-
-        rdf = rdf.Define("xsec", str(datasets[sample]['xsec']))
+        quants += [
+            "genpt_1", "genmass_1", "geneta_1", "genphi_1", "gencharge_1",
+            "genpt_2", "genmass_2", "geneta_2", "genphi_2", "gencharge_2",
+            "genpt_Z", "genmass_Z", "geneta_Z", "genphi_Z"
+        ]
 
         # make output with interesting data
-        rdf.Snapshot("Events", datadir+sample+"_ntuples.root", quants)
+        rdf.Snapshot("Events", f"{datadir+sample}_{number}.root", quants)
         end = time.time()
-        print(f"Finished processing of {sample} samples in {round(end-start,1)} s.")
-        
-        if sample=="DY":
-            start = time.time()
-            sample = 'GEN'
-            print(f"Calculation of Gen quantities for GEN samples.")
-            # perform gen delta R matching and collect corresponding events and gen quantities
-            rdf = rdf.Define("genind_1", """muon_genmatch(
-                                                eta_1,
-                                                phi_1,
-                                                charge_1,
-                                                &GenPart_status,
-                                                &GenPart_statusFlags,
-                                                &GenPart_pdgId,
-                                                &GenPart_genPartIdxMother,
-                                                &GenPart_eta,
-                                                &GenPart_phi
-                                                )""")
-            rdf = rdf.Define("genind_2", """muon_genmatch(
-                                                eta_2,
-                                                phi_2,
-                                                charge_2,
-                                                &GenPart_status,
-                                                &GenPart_statusFlags,
-                                                &GenPart_pdgId,
-                                                &GenPart_genPartIdxMother,
-                                                &GenPart_eta,
-                                                &GenPart_phi
-                                                )""")
-            # if gen matching successfull: save information of gen event
-            rdf = rdf.Define("gen_mask", "genind_1 != -99 && genind_2 != -99 && genind_1 != genind_2")
-            rdf = rdf.Filter("gen_mask")
+        print(f"Finished processing of GEN samples in {round(end-start,1)} s.")
 
-            rdf = rdf.Define("genpt_1", "GenPart_pt[genind_1]")
-            rdf = rdf.Define("genpt_2", "GenPart_pt[genind_2]")
-            rdf = rdf.Define("geneta_1", "GenPart_eta[genind_1]")
-            rdf = rdf.Define("geneta_2", "GenPart_eta[genind_2]")
-            rdf = rdf.Define("genphi_1", "GenPart_phi[genind_1]")
-            rdf = rdf.Define("genphi_2", "GenPart_phi[genind_2]")
-            rdf = rdf.Define("genmass_1", "GenPart_mass[genind_1]")
-            rdf = rdf.Define("genmass_2", "GenPart_mass[genind_2]")
-            rdf = rdf.Define("gencharge_1", "- GenPart_pdgId[genind_1]/fabs(GenPart_pdgId[genind_1])")
-            rdf = rdf.Define("gencharge_2", "- GenPart_pdgId[genind_2]/fabs(GenPart_pdgId[genind_2])")
-
-            rdf = rdf.Define("genp4_1", "ROOT::Math::PtEtaPhiMVector(genpt_1, geneta_1, genphi_1, genmass_1)")
-            rdf = rdf.Define("genp4_2", "ROOT::Math::PtEtaPhiMVector(genpt_2, geneta_2, genphi_2, genmass_2)")
-            rdf = rdf.Define("genp4_Z", "genp4_1 + genp4_2")
-            rdf = rdf.Define("genpt_Z", "genp4_Z.Pt()")
-            rdf = rdf.Define("geneta_Z", "genp4_Z.Eta()")
-            rdf = rdf.Define("genmass_Z", "genp4_Z.M()")
-            rdf = rdf.Define("genphi_Z", "genp4_Z.Phi()")
-
-            
-            quants += [
-                "genpt_1", "genmass_1", "geneta_1", "genphi_1", "gencharge_1",
-                "genpt_2", "genmass_2", "geneta_2", "genphi_2", "gencharge_2",
-                "genpt_Z", "genmass_Z", "geneta_Z", "genphi_Z"
-            ]
-
-            # make output with interesting data
-            rdf.Snapshot("Events", datadir+sample+"_ntuples.root", quants)
-            end = time.time()
-            print(f"Finished processing of GEN samples in {round(end-start,1)} s.")
-
-    return
+    return genweight
 
 
 def yaml_loader(fname):
