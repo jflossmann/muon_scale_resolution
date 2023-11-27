@@ -29,11 +29,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                 variables=tree.keys()
                 df_RECO=tree.arrays(variables, library="pd")
 
-                ################# filter pt ########################  remove this, when it works
-                filter_pt=(df_RECO["pt_1_mean_roccor"]<1000) & (df_RECO["pt_2_mean_roccor"]<1000)
-                df_RECO=df_RECO[filter_pt]
-                ####################################################
-
                 df_RECO["kappa_1"]=0
                 df_RECO["lambda_1"]=0
                 df_RECO["kappa_2"]=0
