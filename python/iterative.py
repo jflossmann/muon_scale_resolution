@@ -19,7 +19,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
     df_GEN_m=df_GEN[mask_M_Z]
 
     for typ in samples:
-        if typ=="DATA":#not typ=="GEN":
+        if not typ=="GEN":
             for subtyp in samples[typ]:
                 print(f"now processing {subtyp}")
 
@@ -34,7 +34,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                 df_RECO=df_RECO[filter_pt]
                 ####################################################
 
-
                 df_RECO["kappa_1"]=0
                 df_RECO["lambda_1"]=0
                 df_RECO["kappa_2"]=0
@@ -44,12 +43,10 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                 df_RECO["PT_1_COR"]=df_RECO["pt_1_mean_roccor"]
                 df_RECO["PT_2_COR"]=df_RECO["pt_2_mean_roccor"]
 
-
                 #table for kappa and lambda
                 #... import from first step
                 kappa_table, lambda_table=get_k_l(df_RECO=df_RECO, eta_bins=eta_bins, phi_bins=phi_bins)
 
-                
                 iterations=[]
                 gen_means=[]
                 reco_means=[]
@@ -69,7 +66,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                     VM_n=[]
                     VP_n=[]
 
-                    
                     reco_means.append([])
                     gen_means.append([])
                     for i in range(len(eta_bins)-1):
@@ -96,8 +92,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                             phi_2_filter_GEN=(phi_bins[j]<df_GEN_me2["genphi_2"]) & (df_GEN_me2["genphi_2"]<=phi_bins[j+1])
                             df_GEN_mep1=df_GEN_me1[phi_1_filter_GEN]
                             df_GEN_mep2=df_GEN_me2[phi_2_filter_GEN]
-
-                            
+  
                             gen_means[n][i].append(np.mean(df_GEN_mep1["genmass_Z"]))
                             reco_means[n][i].append(np.mean(df_RECO_mep1["MASS_Z_COR"]))
 
@@ -113,7 +108,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                             kappa, lambd = iterationsfunktion(Mp=Mp, Mm=Mm, Vp=Vp, Vm=Vm, Kp=Kp, Km=Km)
                             
                             #update kappa and lambda table for given bin
-
                             kappa_table[i][j]=kappa_table[i][j]*kappa
                             lambda_table[i][j]=kappa*lambda_table[i][j]+lambd
 
@@ -155,15 +149,13 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                     if n==iterationsteps-1:
                         plt.hist(df_RECO["MASS_Z_COR"],bins=bins,range=rang,histtype="step",label=f"iteration {n+1}",density=True)
                         plt.legend()
-                        plt.savefig(f"{pdir}ITERATIVE/{subtyp}_{n+1}.png")               
+                        plt.savefig(f"{pdir}ITERATIVE/{subtyp}/{subtyp}_{n+1}.png")               
 
             #make binwise plot
             for i in range(len(eta_bins)-1):
                 for j in range(len(phi_bins)-1):
                     reco=[]
-    
                     gen=[]
-         
                     for n in range(len(reco_means)):
                         reco.append(reco_means[n][i][j])
                         gen.append(gen_means[n][i][j])
@@ -175,13 +167,15 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                     plt.ylabel("mean(M_µµ)")
                     plt.title(f"eta[{eta_bins[i]}, {eta_bins[i+1]}], phi[{round(phi_bins[i],1)}, {round(phi_bins[i+1],1)}]")
                     plt.legend()
-                    plt.savefig(f"{pdir}ITERATIVE/binwise/iteration_mean_eta{i}_phi{j}.png")
+                    plt.savefig(f"{pdir}ITERATIVE/binwise/{subtyp}iteration_mean_eta{i}_phi{j}.png")
                     plt.clf()
             
             plt.plot(iterations, VP)
             plt.plot(iterations,VM)
-            plt.savefig(f"{pdir}ITERATIVE/iteration_min_var.png")
+            plt.savefig(f"{pdir}ITERATIVE/{subtyp}iteration_min_var.png")
             plt.clf()
+
+            #save results
 
 def iterationsfunktion(Mp,Mm,Vp,Vm,Kp,Km):
 
@@ -191,7 +185,6 @@ def iterationsfunktion(Mp,Mm,Vp,Vm,Kp,Km):
     kappa=1+mu
     lambd = ((Vp-Mp*mu)/Kp+(Vm-Mm*mu)/Km)/2
     return kappa, lambd
-
 
 
 def get_k_l(df_RECO, eta_bins, phi_bins):
@@ -221,8 +214,6 @@ def get_k_l(df_RECO, eta_bins, phi_bins):
         
             kappa_table[i][j]+=pt1*pt2*(pt1_cor+pt2_cor)/(pt1_cor*pt2_cor*(pt1+pt2))
             lambda_table[i][j]+=1/pt2_cor-kappa_table[i][j]/pt2
-
-
 
             #print(kappa_table[i][j],lambda_table[i][j], pt1, pt1_cor, 1/(kappa_table[i][j]/pt1-lambda_table[i][j]))
 
