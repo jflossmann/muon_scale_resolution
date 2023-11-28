@@ -132,19 +132,46 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                     df_RECO["MASS_Z_COR"]=np.sqrt( 2*df_RECO.PT_1_COR*df_RECO.PT_2_COR*(np.cosh(df_RECO.eta_1-df_RECO.eta_2)-np.cos(df_RECO.phi_1-df_RECO.phi_2)))
 
                     #define bins for plot
-                    bins=100
-                    rang=[86,96]
-                    
-                    if n==0:
-                        #plt.hist(df_GEN["mass_Z_smeared"],bins=bins,range=rang,histtype="step",label="smeared gen",color='k',density=True)
-                        plt.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label="wo. it. corr",color='r',density=True)
-                        plt.title(subtyp)
-                        plt.xlabel("M_µµ (GeV)")
-                    
-                    if n==iterationsteps-1:
-                        plt.hist(df_RECO["MASS_Z_COR"],bins=bins,range=rang,histtype="step",label=f"iteration {n+1}",density=True)
-                        plt.legend()
-                        plt.savefig(f"{pdir}ITERATIVE/{subtyp}/{subtyp}_{n+1}.png")               
+            bins=80
+            rang=[86,96]        
+            fig, (ax0,ax1)=plt.subplots(2,1, gridspec_kw={"height_ratios":[3,1] })
+            plt.subplots_adjust(wspace=0, hspace=0)
+            ax0.set_xlim(left=rang[0],right=rang[1])
+            ax0.set_xticks([])
+            h_gen=ax0.hist(df_GEN["mass_Z_smeared"],bins=bins,range=rang,histtype="step",label="smeared gen",color='r',density=True)
+            h_reco=ax0.hist(df_RECO["MASS_Z_COR"],bins=bins,range=rang,histtype="step",label=f"iteration {n+1}",density=True)
+            ax0.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label=f"iteration {0}",density=True)
+            ax0.legend()
+
+            ax1.set_ylim(bottom=0.85,top=1.15)
+            ax1.set_xlim(left=rang[0],right=rang[1])
+            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco[0]/h_gen[0],'.')
+            ax1.set_xlabel("M_µµ (GeV)")
+            ax1.set_ylabel("ratio")
+            ax1.grid(True)
+            plt.savefig(f"{pdir}iterative/{subtyp}_z_mass_cut_{n+1}.png")
+            plt.clf()
+
+            bins=100
+            rang=[60,120]        
+            fig, (ax0,ax1)=plt.subplots(2,1, gridspec_kw={"height_ratios":[3,1] })
+            plt.subplots_adjust(wspace=0, hspace=0)
+            ax0.set_xlim(left=rang[0],right=rang[1])
+            ax0.set_xticks([])
+            h_gen=ax0.hist(df_GEN["mass_Z_smeared"],bins=bins,range=rang,histtype="step",label="smeared gen",color='r',density=True)
+            h_reco=ax0.hist(df_RECO["MASS_Z_COR"],bins=bins,range=rang,histtype="step",label=f"iteration {n+1}",density=True)
+            ax0.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label=f"iteration {0}",density=True)
+            ax0.legend()
+
+            ax1.set_ylim(bottom=0.85,top=1.15)
+            ax1.set_xlim(left=rang[0],right=rang[1])
+            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco[0]/h_gen[0],'.')
+            ax1.set_xlabel("M_µµ (GeV)")
+            ax1.set_ylabel("ratio")
+            ax1.grid(True)
+            plt.savefig(f"{pdir}iterative/{subtyp}_z_mass_{n+1}.png")
+            plt.clf()
+                           
 
             #make binwise plot
             for i in range(len(eta_bins)-1):
@@ -162,12 +189,12 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                     plt.ylabel("mean(M_µµ)")
                     plt.title(f"eta[{eta_bins[i]}, {eta_bins[i+1]}], phi[{round(phi_bins[i],1)}, {round(phi_bins[i+1],1)}]")
                     plt.legend()
-                    plt.savefig(f"{pdir}ITERATIVE/binwise/{subtyp}iteration_mean_eta{i}_phi{j}.png")
+                    plt.savefig(f"{pdir}iterative/binwise/{subtyp}/{subtyp}iteration_mean_eta{i}_phi{j}.png")
                     plt.clf()
             
             plt.plot(iterations, VP)
             plt.plot(iterations,VM)
-            plt.savefig(f"{pdir}ITERATIVE/{subtyp}iteration_min_var.png")
+            plt.savefig(f"{pdir}iterative/{subtyp}iteration_min_var.png")
             plt.clf()
 
             #save results
