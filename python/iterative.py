@@ -19,7 +19,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
     df_GEN_m=df_GEN[mask_M_Z]
 
     for typ in samples:
-        if not typ=="GEN":
+        if typ == "SIG" or typ=="DATA":
             for subtyp in samples[typ]:
                 print(f"now processing {subtyp}")
 
@@ -140,14 +140,16 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
             ax0.set_xticks([])
             h_gen=ax0.hist(df_GEN["mass_Z_smeared"],bins=bins,range=rang,histtype="step",label="smeared gen",color='r',density=True)
             h_reco=ax0.hist(df_RECO["MASS_Z_COR"],bins=bins,range=rang,histtype="step",label=f"iteration {n+1}",density=True)
-            ax0.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label=f"iteration {0}",density=True)
+            h_reco0=ax0.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label=f"iteration {0}",density=True)
             ax0.legend()
 
             ax1.set_ylim(bottom=0.85,top=1.15)
             ax1.set_xlim(left=rang[0],right=rang[1])
-            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco[0]/h_gen[0],'.')
+            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco[0]/h_gen[0],'.',label="reco_15it/gen")
+            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco0[0]/h_gen[0],'.',label="reco_0it/gen")
             ax1.set_xlabel("M_µµ (GeV)")
             ax1.set_ylabel("ratio")
+            ax1.legend()
             ax1.grid(True)
             plt.savefig(f"{pdir}iterative/{subtyp}_z_mass_cut_{n+1}.png")
             plt.clf()
@@ -160,14 +162,16 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
             ax0.set_xticks([])
             h_gen=ax0.hist(df_GEN["mass_Z_smeared"],bins=bins,range=rang,histtype="step",label="smeared gen",color='r',density=True)
             h_reco=ax0.hist(df_RECO["MASS_Z_COR"],bins=bins,range=rang,histtype="step",label=f"iteration {n+1}",density=True)
-            ax0.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label=f"iteration {0}",density=True)
+            h_reco0=ax0.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label=f"iteration {0}",density=True)
             ax0.legend()
 
             ax1.set_ylim(bottom=0.85,top=1.15)
             ax1.set_xlim(left=rang[0],right=rang[1])
-            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco[0]/h_gen[0],'.')
+            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco[0]/h_gen[0],'.',label="reco_15it/gen")
+            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco0[0]/h_gen[0],'.',label="reco_0it/gen")
             ax1.set_xlabel("M_µµ (GeV)")
             ax1.set_ylabel("ratio")
+            ax1.legend()
             ax1.grid(True)
             plt.savefig(f"{pdir}iterative/{subtyp}_z_mass_{n+1}.png")
             plt.clf()
@@ -198,6 +202,11 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
             plt.clf()
 
             #save results
+            print(f"saving corrected gen to {samples[typ][subtyp]}")
+            data={key: df_RECO[key].values for key in df_RECO.columns}
+            rdf = ROOT.RDF.MakeNumpyDataFrame(data)
+            rdf.Snapshot("Events", samples[typ][subtyp])
+            print("done")  
 
 def iterationsfunktion(Mp,Mm,Vp,Vm,Kp,Km):
 
