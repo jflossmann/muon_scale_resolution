@@ -35,6 +35,12 @@ def parse_args():
         help="Make scale correction"
     )
     parser.add_argument(
+        '-G',
+        '--gen_cor',
+        default=False,
+        action='store_true',
+        help='Correct GEN-ntuple-reco values with MC-SIG kappa and lambda from 1/pt correction'
+    parser.add_argument(
         '-R',
         '--res',
         default=False,
@@ -149,6 +155,10 @@ if __name__=='__main__':
         zmass.hist_zmass(ntuples_corr, eta_bins, phi_bins, mass_bins, hdir)
         zmass.fit_zmass(eta_bins, phi_bins, hdir)
         zmass.plot_zmass(eta_bins, phi_bins, hdir)
+
+    if args.gen_cor:
+        rc.cor_gen(ntuples_corr["GEN"]["GEN"],ntuples_corr['SIG']['SIG'], eta_bins=eta_bins, phi_bins=phi_bins)
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
         
     if args.res:
         pull_bins=np.linspace(-5,5,100)
