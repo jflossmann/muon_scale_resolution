@@ -39,7 +39,7 @@ def parse_args():
         '--gen_cor',
         default=False,
         action='store_true',
-        help='Correct GEN-ntuple-reco values with MC-SIG kappa and lambda from 1/pt correction'
+        help='Correct GEN-ntuple-reco values with MC-SIG kappa and lambda from 1/pt correction')
     parser.add_argument(
         '-R',
         '--res',
