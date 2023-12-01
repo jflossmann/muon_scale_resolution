@@ -169,5 +169,5 @@ if __name__=='__main__':
         rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
 
     if args.iterative:
-        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_ntuples_zPt_corr.root"
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
         it.iterative_correction(samples=ntuples_corr, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
