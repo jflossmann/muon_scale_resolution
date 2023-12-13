@@ -55,6 +55,13 @@ def parse_args():
     help='Make iterative correction'
     )
     parser.add_argument(
+    '-F',
+    '--residual_fit',
+    default=False,
+    action='store_true',
+    help='Residual_correction'
+    )
+    parser.add_argument(
         '-P',
         '--plot',
         default=False,
@@ -130,7 +137,7 @@ if __name__=='__main__':
 
     args = parse_args()
 
-    if args.ntuples:
+       if args.ntuples:
         # ntuple.make_ntuples(nanoAODs, datasets, datadir)
         os.makedirs(hdir, exist_ok=True)
         ntuple.hist_zpt(ntuples, pt_bins, hdir)
@@ -144,6 +151,10 @@ if __name__=='__main__':
         corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_mean_roccor')
         corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_median_roccor')
 
+        #correct gen-reco-values with mc-reco parameters
+        rc.cor_gen(ntuples_corr["GEN"]["GEN"],ntuples_corr['SIG']['SIG'], eta_bins=eta_bins, phi_bins=phi_bins)
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
+        
     if args.plot:
         os.makedirs(pdir, exist_ok=True)
         plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "RECREATE")
@@ -156,13 +167,11 @@ if __name__=='__main__':
         zmass.fit_zmass(eta_bins, phi_bins, hdir)
         zmass.plot_zmass(eta_bins, phi_bins, hdir)
 
-    if args.gen_cor:
-        rc.cor_gen(ntuples_corr["GEN"]["GEN"],ntuples_corr['SIG']['SIG'], eta_bins=eta_bins, phi_bins=phi_bins)
-        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
-        
     if args.res:
         pull_bins=np.linspace(-5,5,100)
         abseta_bins=np.linspace(0, 2.4, 13)
+        rc.cor_gen(ntuples_corr["GEN"]["GEN"],ntuples_corr['SIG']['SIG'], eta_bins=eta_bins, phi_bins=phi_bins)
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
         nl_bins=[6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5]
         pt_bins=[25,30,35,40,50,60,80,110,150,200]
         #rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
@@ -171,3 +180,6 @@ if __name__=='__main__':
     if args.iterative:
         ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
         it.iterative_correction(samples=ntuples_corr, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
+
+    if args.residual_fit:
+        pass
