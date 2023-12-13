@@ -238,6 +238,8 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
     df["abseta_2"]=np.abs(df["eta_2"])
     df["genpt_1_smeared"]=df["genpt_1"]
     df["genpt_2_smeared"]=df["genpt_2"]
+    df["CB_sigma_1"]=1
+    df["CB_sigma_2"]=1
 
     print("apply corrections")
     for i in tqdm(range(len(abseta_bins)-1)):
@@ -273,7 +275,8 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
                 if use_CB_smear:
                     #get CB sigma for current bin:
                     CB_sigma=fit_results["pull"]["eta_"+str(i)]["nL_"+str(j)]["Parameter 1"]["value"]
-
+                    df.loc[eta_1_filter & nl_1_filter,"CB_sigma_1"]=CB_sigma
+                    df.loc[eta_2_filter & nl_2_filter,"CB_sigma_2"]=CB_sigma
                     df.loc[eta_1_filter & nl_1_filter, "genpt_1_smeared"]=pt1 + pt1*np.random.normal(0, std1*CB_sigma, size=len((pt1)))
                     df.loc[eta_2_filter & nl_2_filter, "genpt_2_smeared"]=pt2 + pt2*np.random.normal(0, std2*CB_sigma, size=len((pt2)))
                 else:
