@@ -12,6 +12,7 @@ import python.plot as plot
 import python.zmass as zmass
 import python.res_corr as rc
 import python.iterative as it
+import python.RESIDUAL as rs
 
 def parse_args():
     parser = ArgumentParser(
@@ -182,4 +183,7 @@ if __name__=='__main__':
         it.iterative_correction(samples=ntuples_corr, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
 
     if args.residual_fit:
-        pass
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
+        
+        rs.residual_correction(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
+        #rs.plot_result(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
