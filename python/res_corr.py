@@ -447,6 +447,4 @@ def cor_gen(ntuples_gen, ntuples_reco, eta_bins, phi_bins):
     rdf = ROOT.RDF.MakeNumpyDataFrame(data)
     rdf.Snapshot("Events", ntuples_gen.replace('.root', '_corr.root'))
     print("done")  
-    
-    def alternative_res_cor():
-        pass
+
