@@ -14,6 +14,16 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
     variables=tree.keys()
     df_GEN=tree.arrays(variables, library="pd")
 
+    #make columns for corrected reconstructed gen-values
+    df_GEN["kappa_1"]=0
+    df_GEN["lambda_1"]=0
+    df_GEN["kappa_2"]=0
+    df_GEN["lambda_2"]=0
+
+    df_GEN["MASS_Z_COR"]=df_GEN["mass_Z_mean_roccor"]
+    df_GEN["PT_1_COR"]=df_GEN["pt_1_mean_roccor"]
+    df_GEN["PT_2_COR"]=df_GEN["pt_2_mean_roccor"]
+
     #cut events with 86<M_z_smeared<96
     mask_M_Z=(df_GEN.genmass_Z>86) & (df_GEN.genmass_Z<96)
     df_GEN_m=df_GEN[mask_M_Z]
@@ -111,6 +121,37 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
 
                     #apply corrections
                     print("apply correction")
+
+                    #correct gen-reco values
+                    if subtyp=="SIG":
+                        for i in range(len(eta_bins)-1):
+                            #filter for eta bin
+                            eta_1_filter=(eta_bins[i]<df_GEN["eta_1"]) & (df_GEN["eta_1"]<=eta_bins[i+1])
+                            eta_2_filter=(eta_bins[i]<df_GEN["eta_2"]) & (df_GEN["eta_2"]<=eta_bins[i+1])
+                            
+                            for j in range(len(phi_bins)-1):
+                                phi_1_filter=(phi_bins[j]<df_GEN["phi_1"]) & (df_GEN["phi_1"]<=phi_bins[j+1])
+                                phi_2_filter=(phi_bins[j]<df_GEN["phi_2"]) & (df_GEN["phi_2"]<=phi_bins[j+1])
+                                
+                                df_GEN.loc[eta_1_filter & phi_1_filter, "kappa_1"]=kappa_table[i][j]
+                                df_GEN.loc[eta_1_filter & phi_1_filter, "lambda_1"]=lambda_table[i][j]
+
+                                df_GEN.loc[eta_2_filter & phi_2_filter, "kappa_2"]=kappa_table[i][j]
+                                df_GEN.loc[eta_2_filter & phi_2_filter, "lambda_2"]=lambda_table[i][j]
+
+                        #calc correctet muon pt and z_mass
+                        df_GEN["PT_1_COR"]=1/(df_GEN["kappa_1"]/df_GEN["pt_1"] - df_GEN["lambda_1"])
+                        df_GEN["PT_2_COR"]=1/(df_GEN["kappa_2"]/df_GEN["pt_2"] + df_GEN["lambda_2"])
+                        df_GEN["MASS_Z_COR"]=np.sqrt( 2*df_GEN.PT_1_COR*df_GEN.PT_2_COR*(np.cosh(df_GEN.eta_1-df_GEN.eta_2)-np.cos(df_GEN.phi_1-df_GEN.phi_2)))
+
+                        #save corrected gen results
+                        print(f"saving corrected gen to {samples['GEN']['GEN']}")
+                        data={key: df_GEN[key].values for key in df_GEN.columns}
+                        rdf = ROOT.RDF.MakeNumpyDataFrame(data)
+                        rdf.Snapshot("Events", samples["GEN"]["GEN"])
+                        print("done")
+
+                    #correct reco values
                     for i in range(len(eta_bins)-1):
                         #filter for eta bin
                         eta_1_filter=(eta_bins[i]<df_RECO["eta_1"]) & (df_RECO["eta_1"]<=eta_bins[i+1])
@@ -131,7 +172,10 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                     df_RECO["PT_2_COR"]=1/(df_RECO["kappa_2"]/df_RECO["pt_2"] + df_RECO["lambda_2"])
                     df_RECO["MASS_Z_COR"]=np.sqrt( 2*df_RECO.PT_1_COR*df_RECO.PT_2_COR*(np.cosh(df_RECO.eta_1-df_RECO.eta_2)-np.cos(df_RECO.phi_1-df_RECO.phi_2)))
 
-                    #define bins for plot
+            
+            
+                   
+            #define bins for plot
             bins=80
             rang=[86,96]        
             fig, (ax0,ax1)=plt.subplots(2,1, gridspec_kw={"height_ratios":[3,1] })
@@ -202,7 +246,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
             plt.clf()
 
             #save results
-            print(f"saving corrected gen to {samples[typ][subtyp]}")
+            print(f"saving corrected dfs to {samples[typ][subtyp]}")
             data={key: df_RECO[key].values for key in df_RECO.columns}
             rdf = ROOT.RDF.MakeNumpyDataFrame(data)
             rdf.Snapshot("Events", samples[typ][subtyp])
