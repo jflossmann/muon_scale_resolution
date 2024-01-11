@@ -138,7 +138,7 @@ if __name__=='__main__':
 
     args = parse_args()
 
-       if args.ntuples:
+    if args.ntuples:
         # ntuple.make_ntuples(nanoAODs, datasets, datadir)
         os.makedirs(hdir, exist_ok=True)
         ntuple.hist_zpt(ntuples, pt_bins, hdir)
@@ -175,7 +175,7 @@ if __name__=='__main__':
         ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
         nl_bins=[6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5]
         pt_bins=[25,30,35,40,50,60,80,110,150,200]
-        #rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
+        rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
         rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
 
     if args.iterative:
@@ -184,6 +184,7 @@ if __name__=='__main__':
 
     if args.residual_fit:
         ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
-        
+        abseta_bins=np.linspace(0, 2.4, 13)
+
         rs.residual_correction(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
         #rs.plot_result(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
