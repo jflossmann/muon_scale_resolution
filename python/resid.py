@@ -140,7 +140,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                         x2_old=np.sum((gen_hist_old[0]-hist_reco[0])**2/hist_reco[0])
                         x2_new=np.sum((gen_hist_new[0]-hist_reco[0])**2/hist_reco[0])
     
-                        ax0.text(85, 0.001, s=f"χ²old:{round(x2_old,4)}, χ²new:{round(x2_new,4)}")
+                        ax0.text(87, 0.001, s=f"χ²old:{round(x2_old,4)}, χ²new:{round(x2_new,4)}")
                             
                         ax0.set_ylabel("normalized event count")
                         ax0.set_xlim(left=rang[0],right=rang[1])
@@ -148,8 +148,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                         ax0.legend()
 
                         ax1.set_xlim(left=rang[0],right=rang[1])
-                        ax1.plot(np.linspace(rang[0],rang[1],bins),hist_reco[0]/gen_hist_old[0],".", c="r", label="RECO/old")
-                        ax1.plot(np.linspace(rang[0],rang[1],bins),hist_reco[0]/gen_hist_new[0],"_", c="b", label="RECO/new")
+                        ax1.plot(np.linspace(rang[0],rang[1],bins),gen_hist_old[0]/hist_reco[0],".", c="r", label="old/RECO")
+                        ax1.plot(np.linspace(rang[0],rang[1],bins),gen_hist_new[0]/hist_reco[0],"_", c="b", label="new/RECO")
                         ax1.set_xlabel("M_µµ (GeV)")
                         ax1.set_ylabel("ratio")
                         ax1.grid(True)
@@ -211,8 +211,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                 ax0.legend()
 
                 ax1.set_xlim(left=rang[0],right=rang[1])
-                ax1.plot(np.linspace(rang[0],rang[1],bins),hist_reco[0]/gen_hist_old[0],".", c="r", label="RECO/old")
-                ax1.plot(np.linspace(rang[0],rang[1],bins),hist_reco[0]/gen_hist_new[0],"_", c="b", label="RECO/new")
+                ax1.plot(np.linspace(rang[0],rang[1],bins),gen_hist_old[0]/hist_reco[0],".", c="r", label="old/RECO")
+                ax1.plot(np.linspace(rang[0],rang[1],bins),gen_hist_new[0]/hist_reco[0],"_", c="b", label="new/RECO")
                 ax1.set_xlabel("M_µµ (GeV)")
                 ax1.set_ylabel("ratio")
                 ax1.grid(True)
