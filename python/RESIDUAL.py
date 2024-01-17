@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import uproot
 from tqdm import tqdm
 import json
+import os
 from scipy.stats import crystalball
 
 
@@ -30,6 +31,8 @@ def minfinder(fun, args, bounds, n=10, N=10):
     return {"val": X2[m], "x": K[m]}
 
 def crystal_ball(x, alpha, n, mu, sigma):  # this is the parametrization from wikipedia
+    mu = np.zeros(len(mu))
+    x = x - np.ones(len(x)) * np.mean(x)
     return  crystalball.pdf(x=-x, beta=alpha, m=n, loc=-mu, scale=sigma)  # scipy uses different parameter names
 
 def chi2(k, df_gen, reco_hist, bins=50, rang=[81,101]):
@@ -46,6 +49,7 @@ def chi2(k, df_gen, reco_hist, bins=50, rang=[81,101]):
     
     weights=w1*w2
     weights=np.nan_to_num(weights)
+    weights = weights/np.mean(weights)
     
     #make histogram
     gen_hist=np.histogram(df_gen.mass_Z_smeared, bins=bins, range=rang, weights=weights)
@@ -66,8 +70,8 @@ def chi2(k, df_gen, reco_hist, bins=50, rang=[81,101]):
 def residual_correction(samples, abseta_bins, hdir, pdir):
     #dict for results
     k_results={}
-    bins=40
-    rang=[86,96]
+    bins=60
+    rang=[80,102]
     n=8
     #get gen data
     file=uproot.open(samples["GEN"]["GEN"])
@@ -88,14 +92,15 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
     plt.hist(df_GEN_m["x1"],range=[-0.2,0.2], bins=50,histtype="step", label="x1")
     plt.hist(df_GEN_m["x2"],range=[-0.2,0.2], bins=50,histtype="step", label="x2")
     plt.legend()
-    plt.savefig(f"{pdir}residual/fits/x_hist.png")
+    os.makedirs(f"{pdir}residual/fits", exist_ok=True)
+    plt.savefig(f"{pdir}residual/fits/x_hist_all.png")
     plt.clf()
 
 
     
     #filter events with very poorly reconstructed muons
-    bad_1_filter = (np.abs(df_GEN_m["x1"]) < 4*df_GEN_m["CB_sigma_1"]*df_GEN_m["std1"])
-    bad_2_filter = (np.abs(df_GEN_m["x2"]) < 4*df_GEN_m["CB_sigma_2"]*df_GEN_m["std2"])
+    bad_1_filter = (np.abs(df_GEN_m["x1"]) < 2*df_GEN_m["CB_sigma_1"]*df_GEN_m["std1"])
+    bad_2_filter = (np.abs(df_GEN_m["x2"]) < 2*df_GEN_m["CB_sigma_2"]*df_GEN_m["std2"])
     
     df_GEN_m=df_GEN_m[bad_1_filter]
     df_GEN_m=df_GEN_m[bad_2_filter]
@@ -136,7 +141,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                     plt.hist(df_GEN_me["x1"],range=[-0.05,0.05], bins=50,histtype="step", label="x1")
                     plt.hist(df_GEN_me["x2"],range=[-0.05,0.05], bins=50,histtype="step", label="x2")
                     plt.legend()
-                    plt.savefig(f"{pdir}residual/fits/x_hist.png")
+                    plt.savefig(f"{pdir}residual/fits/x_hist_{i}.png")
                     plt.clf()
 
                     n_gen=len(df_GEN_me)
@@ -145,7 +150,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                     hist_reco=list(plt.hist(df_RECO_me["MASS_Z_COR"],bins=bins, weights=scale_weights_reco,  range=rang, color="k", alpha=0.5, label="reco"))
                     
                     #fit
-                    k=minfinder(fun=chi2, args=(df_GEN_me, hist_reco, bins, rang), bounds=[0.5,1.5], n=10, N=n)
+                    k=minfinder(fun=chi2, args=(df_GEN_me, hist_reco, bins, rang), bounds=[0.8,10.0], n=10, N=n)
 
                     K.append(k["x"])
 
@@ -155,47 +160,69 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                     mu1, mu2       = df_GEN_me.CB_mean_1, df_GEN_me.CB_mean_2
                     sig1, sig2     = df_GEN_me.CB_sigma_1*df_GEN_me.std1, df_GEN_me.CB_sigma_2*df_GEN_me.std2
 
+                    print("Error check: x mean", np.mean(x1), np.mean(x2))
+                    print("Error check: x stds", np.std(x1), np.std(x2))
+                    print("Error check: x stds", np.std(x1)/np.sqrt(len(x1)), np.std(x2)/np.sqrt(len(x2)))
+
                     w1=crystal_ball(x1, alpha1, n1, mu1, sig1*K[i])/crystal_ball(x1, alpha1, n1, mu1, sig1)
                     w2=crystal_ball(x2, alpha2, n2, mu2, sig2*K[i])/crystal_ball(x2, alpha2, n2, mu2, sig2)
                     
                     weights=w1*w2
                     weights=np.nan_to_num(weights)
+                    weights = weights/np.mean(weights)
 
                     #errorchecking
                     if i == 0:
                         print(K[i])
+                        Ks = [0.8,1,1.2,1.4, 1.6, 1.8, 5.0, 20.]
 
                         #plot fit for different ks
-                        for K_test in [0.5,0.75,1,1.25,1.5]:
+                        for K_test in Ks:
                             w1=crystal_ball(x1, alpha1, n1, mu1, sig1*K_test)/crystal_ball(x1, alpha1, n1, mu1, sig1)
                             w2=crystal_ball(x2, alpha2, n2, mu2, sig2*K_test)/crystal_ball(x2, alpha2, n2, mu2, sig2)
                         
                             weights=w1*w2
                             weights=np.nan_to_num(weights)
+                            weights = weights/np.mean(weights)
                             resid=plt.hist(df_GEN_me["mass_Z_smeared"], bins=bins, range=rang,  weights=weights, histtype="step",label="k="+str(K_test))
+                            _chi2 = np.sum( (resid[0] - hist_reco[0])**2 / hist_reco[0] )
+                            print("alternative chi squareds", K_test, _chi2)
                         plt.legend()
                         plt.savefig(f"{pdir}residual/fits/{subtyp}_eta_{i}_test_fit.png")
                         plt.clf()
 
-                        #plot weights for different ks
-                        for K_test in [0.5,0.75,0.95,1.05,1.25,1.5]:
+
+                        plt.hist2d(x1,df_GEN_me.mass_Z_smeared,bins=40,range=[[-.05,.05],rang],label="k="+str(K_test))
+                        plt.colorbar()
+                        plt.ylabel("mass")
+                        plt.xlabel("x1")
+
+                        plt.savefig(f"{pdir}residual/fits/{subtyp}_eta_{i}_x1mass_2d.png")
+                        plt.clf()
+
+                        plt.hist2d(x2,df_GEN_me.mass_Z_smeared,bins=40,range=[[-.05,.05],rang],label="k="+str(K_test))
+                        plt.colorbar()
+                        plt.ylabel("mass")
+                        plt.xlabel("x2")
+
+                        plt.savefig(f"{pdir}residual/fits/{subtyp}_eta_{i}_x2mass_2d.png")
+                        plt.clf()
+
+                        plt.hist2d(x1,x2,bins=40,range=[[-.05,.05],[-.05,.05]],label="k="+str(K_test))
+                        plt.colorbar()
+                        plt.xlabel("x1")
+                        plt.ylabel("x2")
+
+                        plt.savefig(f"{pdir}residual/fits/{subtyp}_eta_{i}_x1x2_2d.png")
+                        plt.clf()
+
+                        for K_test in Ks:
                             w1=crystal_ball(x1, alpha1, n1, mu1, sig1*K_test)/crystal_ball(x1, alpha1, n1, mu1, sig1)
                             w2=crystal_ball(x2, alpha2, n2, mu2, sig2*K_test)/crystal_ball(x2, alpha2, n2, mu2, sig2)
                         
                             weights=w1*w2
                             weights=np.nan_to_num(weights)
-                            m=np.mean(weights)
-                            plt.hist(weights,bins=50,range=[0.5,1.5],histtype="step",label="k="+str(K_test)+" ⌀:"+str(round(m,2)))
-                        plt.legend()
-                        plt.savefig(f"{pdir}residual/fits/{subtyp}_eta_{i}_weights.png")
-                        plt.clf()
-
-                        for K_test in [0.5,0.75,0.95,1.05,1.25,1.5]:
-                            w1=crystal_ball(x1, alpha1, n1, mu1, sig1*K_test)/crystal_ball(x1, alpha1, n1, mu1, sig1)
-                            w2=crystal_ball(x2, alpha2, n2, mu2, sig2*K_test)/crystal_ball(x2, alpha2, n2, mu2, sig2)
-                        
-                            weights=(w1+w2)/2
-                            weights=np.nan_to_num(weights)
+                            weights = weights/np.mean(weights)
                             m=np.mean(weights)
 
                             plt.hist2d(w1,x1,bins=50,range=[[0.5,1.5],[-0.05,0.05]],label="k="+str(K_test))
@@ -207,11 +234,23 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                             plt.clf()
 
                             plt.hist2d(w2,x2,bins=50,range=[[0.5,1.5],[-0.05,0.05]],label="k="+str(K_test))
+                            plt.colorbar()
                             plt.ylabel("x2")
                             plt.xlabel("weight2")
 
                             plt.savefig(f"{pdir}residual/fits/{subtyp}_eta_{i}_{K_test}_weights2_2d.png")
                             plt.clf()
+
+                            plt.hist2d(weights,df_GEN_me.mass_Z_smeared,bins=40,range=[[0.2,1.5],rang],label="k="+str(K_test))
+                            plt.colorbar()
+                            plt.ylabel("mass")
+                            plt.xlabel("weight")
+
+                            plt.savefig(f"{pdir}residual/fits/{subtyp}_eta_{i}_{K_test}_weights_2d.png")
+                            plt.clf()
+                            print("Weight details:", K_test)
+                            print("Mean, std", np.mean(weights), np.std(weights))
+                            print("Min, max", min(weights), max(weights))
 
                         #for K_test in [0.5,0.75,0.95,1.05,1.25,1.5]:
                         #    w1=crystal_ball(x1, alpha1, n1, mu1, sig1*K_test)/crystal_ball(x1, alpha1, n1, mu1, sig1)
@@ -260,14 +299,15 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                     w1=crystal_ball(x1, alpha1, n1, mu1, sig1*K[i])/crystal_ball(x1, alpha1, n1, mu1, sig1)
                     w2=crystal_ball(x2, alpha2, n2, mu2, sig2*K[i])/crystal_ball(x2, alpha2, n2, mu2, sig2)
                     
-                    weights=(w1+w2)/2
+                    weights=w1*w2
                     weights=np.nan_to_num(weights)
+                    weights = weights/np.mean(weights)
                     resid=plt.hist(df_GEN_me["mass_Z_smeared"], bins=bins, range=rang,  weights=weights, histtype="step", color="b",label="residual")
                     
                     
                     smear=plt.hist(df_GEN_me["mass_Z_smeared"],bins=bins, range=rang, histtype="step",color="r", label="smeared")
-                    x2_smeared=np.sum((resid[0]-hist_reco[0])**2/hist_reco[0])
-                    x2_residual=np.sum((smear[0]-hist_reco[0])**2/hist_reco[0])
+                    x2_smeared=np.sum((smear[0]-hist_reco[0])**2/hist_reco[0])
+                    x2_residual=np.sum((resid[0]-hist_reco[0])**2/hist_reco[0])
                     plt.text(91, 0.001, s=f"s:{round(x2_smeared,5)}, r:{round(x2_residual,5)}")
                     plt.legend()
                     plt.savefig(f"{pdir}residual/fits/{subtyp}_eta_{i}_fit.png")

@@ -269,7 +269,7 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
 
                     #save all fit values in df for residual step
                     df.loc[eta_1_filter & nl_1_filter,"std1"]=np.std(df_en1["R_1"])
-                    df.loc[eta_2_filter & nl_2_filter,"std2"]=np.std(df_en1["R_2"])
+                    df.loc[eta_2_filter & nl_2_filter,"std2"]=np.std(df_en2["R_2"]) #error was here
 
                     df.loc[eta_1_filter & nl_1_filter,"CB_mean_1"]=CB_mean
                     df.loc[eta_2_filter & nl_2_filter,"CB_mean_2"]=CB_mean
