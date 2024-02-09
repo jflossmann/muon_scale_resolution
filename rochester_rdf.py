@@ -12,7 +12,7 @@ import python.plot as plot
 import python.zmass as zmass
 import python.res_corr as rc
 import python.iterative as it
-import python.RESIDUAL as rs
+import python.resid as rs
 
 def parse_args():
     parser = ArgumentParser(
