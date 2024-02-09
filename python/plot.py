@@ -155,7 +155,7 @@ def hist_ntuples(
             pvar = 'gen'+var
         for sample in ntuples[typ]:
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
-            rdf = rdf.Define("weight", "zPtWeight*genWeight*sumwWeight*xsec*sf_id*sf_iso")
+            rdf = rdf.Define("weight", "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso")
             h_info=(pvar+"_"+sample, var+" "+sample, nbins, low, up)
             h = rdf.Histo1D(h_info, pvar, 'weight')
             hists[typ] += [h]
@@ -218,19 +218,18 @@ def plot_hists(hfile, hists, outfile, binsx=[], binsy=[], dim=1):
         )
 
 
-def plot_stuff(pdir, eta_bins, phi_bins):
+def plot_stuff(pdir, eta_bins, phi_bins, corr):
     # Z mass
     os.makedirs(f'{pdir}mass_z/', exist_ok=True)
-    for corr in ['', '_mean_roccor', '_median_roccor']:
-        plot_hists(
-            hfile='hists/mass_z.root',
-            hists={
-                'SIG': f"mass_Z{corr}_SIG",
-                'DATA': f"mass_Z{corr}_DATA",
-                'GEN': "genmass_Z_GEN"
-            },
-            outfile=f"{pdir}mass_z/mass_z{corr}"
-        )
+    plot_hists(
+        hfile='hists/mass_z.root',
+        hists={
+            'SIG': f"mass_Z{corr}_SIG",
+            'DATA': f"mass_Z{corr}_DATA",
+            'GEN': "genmass_Z_GEN"
+        },
+        outfile=f"{pdir}mass_z/mass_z{corr}"
+    )
 
     # one over pT
     hdict = {
@@ -241,14 +240,6 @@ def plot_stuff(pdir, eta_bins, phi_bins):
         'mean_pos': {
             'SIG': "h_oneOverPt_SIG_pos_pyx",
             'DATA': "h_oneOverPt_DATA_pos_pyx"
-        },
-        'median_neg': {
-            'SIG': "h_oneOverPt_SIG_neg_median",
-            'DATA': "h_oneOverPt_DATA_neg_median"
-        },
-        'median_pos': {
-            'SIG': "h_oneOverPt_SIG_pos_median",
-            'DATA': "h_oneOverPt_DATA_pos_median"
         }
     }
     os.makedirs(f'{pdir}oneOverPt/', exist_ok=True)
@@ -271,30 +262,29 @@ def plot_stuff(pdir, eta_bins, phi_bins):
         )
 
     # specific bin
-    for corr in ['', '_mean_roccor', '_median_roccor']:
-        tf = ROOT.TFile(f"hists/oneOverPt{corr}.root")
-        h_mc = tf.Get("h_oneOverPt_SIG_neg").ProjectionZ("h_mc", 3,3,4,4)
-        h_mc.Scale(1./h_mc.Integral())
-        h_dt = tf.Get("h_oneOverPt_DATA_neg").ProjectionZ("h_dt", 3,3,4,4)
-        h_dt.Scale(1./h_dt.Integral())
-        h_gen = tf.Get("h_oneOverPt_GEN_neg").ProjectionZ("h_gen", 3,3,4,4)
-        h_gen.Scale(1./h_gen.Integral())
-        print(h_mc.GetBinContent(2), h_dt.GetBinContent(2), h_gen.GetBinContent(2))
-        plot_ratio(
-            hists = {
-                'mc': h_mc,
-                'dt': h_dt,
-                'gen': h_gen
-            },
-            title='',
-            outfile=f"{pdir}oneOverPt/bin_3_4{corr}",
-            text=[
-                f'MC: {round(h_mc.GetMean(),7)}',
-                f'DATA: {round(h_dt.GetMean(),7)}',
-                f'GEN: {round(h_gen.GetMean(),7)}'
-            ],
-            xrange=[1, h_mc.GetXaxis().GetNbins()]
-        )
-        h_yx = tf.Get("h_oneOverPt_SIG_neg_pyx")
-        h_yx.SetBinContent(200, 0)
-        print(h_yx.GetBinContent(3,4))
+    tf = ROOT.TFile(f"hists/oneOverPt{corr}.root")
+    h_mc = tf.Get("h_oneOverPt_SIG_neg").ProjectionZ("h_mc", 3,3,4,4)
+    h_mc.Scale(1./h_mc.Integral())
+    h_dt = tf.Get("h_oneOverPt_DATA_neg").ProjectionZ("h_dt", 3,3,4,4)
+    h_dt.Scale(1./h_dt.Integral())
+    h_gen = tf.Get("h_oneOverPt_GEN_neg").ProjectionZ("h_gen", 3,3,4,4)
+    h_gen.Scale(1./h_gen.Integral())
+    print(h_mc.GetBinContent(2), h_dt.GetBinContent(2), h_gen.GetBinContent(2))
+    plot_ratio(
+        hists = {
+            'mc': h_mc,
+            'dt': h_dt,
+            'gen': h_gen
+        },
+        title='',
+        outfile=f"{pdir}oneOverPt/bin_3_4{corr}",
+        text=[
+            f'MC: {round(h_mc.GetMean(),7)}',
+            f'DATA: {round(h_dt.GetMean(),7)}',
+            f'GEN: {round(h_gen.GetMean(),7)}'
+        ],
+        xrange=[1, h_mc.GetXaxis().GetNbins()]
+    )
+    h_yx = tf.Get("h_oneOverPt_SIG_neg_pyx")
+    h_yx.SetBinContent(200, 0)
+    print(h_yx.GetBinContent(3,4))

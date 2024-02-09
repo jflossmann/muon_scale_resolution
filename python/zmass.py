@@ -10,18 +10,14 @@ plotdict = {
     'SIG': {
         'h_EtaPhiVsMz_neg_SIG': ['eta_1', 'phi_1', 'mass_Z'],
         'h_EtaPhiVsMz_pos_SIG': ['eta_2', 'phi_2', 'mass_Z'],
-        'h_EtaPhiVsMz_neg_mean_roccor_SIG': ['eta_1', 'phi_1', 'mass_Z_mean_roccor'],
-        'h_EtaPhiVsMz_pos_mean_roccor_SIG': ['eta_2', 'phi_2', 'mass_Z_mean_roccor'],
-        'h_EtaPhiVsMz_neg_median_roccor_SIG': ['eta_1', 'phi_1', 'mass_Z_median_roccor'],
-        'h_EtaPhiVsMz_pos_median_roccor_SIG': ['eta_2', 'phi_2', 'mass_Z_median_roccor'],
+        'h_EtaPhiVsMz_neg_roccor_SIG': ['eta_1', 'phi_1', 'mass_Z_roccor'],
+        'h_EtaPhiVsMz_pos_roccor_SIG': ['eta_2', 'phi_2', 'mass_Z_roccor']
     },
     'DATA': {
         'h_EtaPhiVsMz_neg_DATA': ['eta_1', 'phi_1', 'mass_Z'],
         'h_EtaPhiVsMz_pos_DATA': ['eta_2', 'phi_2', 'mass_Z'],
-        'h_EtaPhiVsMz_neg_mean_roccor_DATA': ['eta_1', 'phi_1', 'mass_Z_mean_roccor'],
-        'h_EtaPhiVsMz_pos_mean_roccor_DATA': ['eta_2', 'phi_2', 'mass_Z_mean_roccor'],
-        'h_EtaPhiVsMz_neg_median_roccor_DATA': ['eta_1', 'phi_1', 'mass_Z_median_roccor'],
-        'h_EtaPhiVsMz_pos_median_roccor_DATA': ['eta_2', 'phi_2', 'mass_Z_median_roccor'],
+        'h_EtaPhiVsMz_neg_roccor_DATA': ['eta_1', 'phi_1', 'mass_Z_roccor'],
+        'h_EtaPhiVsMz_pos_roccor_DATA': ['eta_2', 'phi_2', 'mass_Z_roccor']
     },
     'GEN': {
         'h_EtaPhiVsMz_neg_GEN': ['geneta_1', 'genphi_1', 'genmass_Z'],
@@ -80,7 +76,7 @@ def hist_zmass(ntuples, eta_bins, phi_bins, mass_bins, hdir)->None:
 
             for sample in ntuples[typ]:
                 rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
-                rdf = rdf.Define("weight", "zPtWeight*genWeight*sumwWeight*sf_id*sf_iso")
+                rdf = rdf.Define("weight", "zPtWeight*genWeight/sumwWeight*sf_id*sf_iso")
                 #create 3D histogram from ntuple
                 hists_3d[typ+n].append(
                     rdf.Histo3D(
@@ -160,7 +156,7 @@ def plot_zmass(eta_bins, phi_bins, hdir):
     os.makedirs(f'plots/zmass_fits/', exist_ok=True)
 
     for np in ['neg', 'pos']:
-        for roccor in ['', '_mean_roccor', '_median_roccor']:
+        for roccor in ['', '_roccor']:
             h_mc = tf.Get(f'h_EtaPhiVsMz_{np+roccor}_SIG_fitresult')
             h_gen = tf.Get(f'h_EtaPhiVsMz_{np}_GEN_fitresult')
             h_data = tf.Get(f'h_EtaPhiVsMz_{np+roccor}_DATA_fitresult')

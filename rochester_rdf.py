@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from array import array
 from argparse import ArgumentParser
 import os
+from time import time
 
 # import modules
 import python.ntuple as ntuple
@@ -149,19 +150,17 @@ if __name__=='__main__':
         corr.hist_oneOverpT(ntuples_zPt, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir)
         corr.get_scale_corrections(samples_to_plot, eta_bins, phi_bins, charge_bins, hdir)
         corr.apply_scale_corrections(ntuples_zPt, hdir)
-        corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_mean_roccor')
-        corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_median_roccor')
+        corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_roccor')
 
         #correct gen-reco-values with mc-reco parameters
-        rc.cor_gen(ntuples_corr["GEN"]["GEN"],ntuples_corr['SIG']['SIG'], eta_bins=eta_bins, phi_bins=phi_bins)
-        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
+        #rc.cor_gen(ntuples_corr["GEN"]["GEN"],ntuples_corr['SIG']['SIG'], eta_bins=eta_bins, phi_bins=phi_bins)
+        #ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
         
     if args.plot:
         os.makedirs(pdir, exist_ok=True)
         plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "RECREATE")
-        for corr in ['_mean_roccor', '_median_roccor']:
-            plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "update", corr)
-        plot.plot_stuff(pdir, eta_bins, phi_bins)
+        plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "update", corr='_roccor')
+        plot.plot_stuff(pdir, eta_bins, phi_bins, corr='_roccor')
         
     if args.zmass:
         zmass.hist_zmass(ntuples_corr, eta_bins, phi_bins, mass_bins, hdir)
