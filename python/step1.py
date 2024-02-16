@@ -1,17 +1,10 @@
 import ROOT
 from array import array
 from tqdm import tqdm
-from multiprocessing import Pool, RLock
 import os
-from time import time
-
-#define different statistics to base corrections on
 
 def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='')->None:
     """create histograms for inverse transversal momentum from ntuples"""
-        
-    print("Started producing oneOverpT histograms")
-    t0 = time()
 
     hists = {}
     hists["tosave"] = []
@@ -85,15 +78,9 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
         h.Write()
     tf.Close()
 
-    print(f"Finished producing oneOverpT histograms in {time()-t0}s")
-
-
 
 def get_scale_corrections(samples, eta_bins, phi_bins, charge_bins, hdir)->None: 
     """extract scale corrections from ntuple data"""
-
-    print("Started extracting scale corrections")
-    t0 = time()
 
     #charges
     negpos = ["neg", "pos"]
@@ -199,65 +186,3 @@ def get_scale_corrections(samples, eta_bins, phi_bins, charge_bins, hdir)->None:
         M[typ].Write()
         A[typ].Write()
     tf.Close()
-
-    print(f"Finished extracting scale corrections in {time() - t0}s.")
-
-
-
-def apply_scale_corrections(ntuples, hdir):
-
-    print("Started application of scale corrections")
-    t0 = time()
-
-    #open Tfile with scale corrections
-    ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step1_C.root", "READ");')
-    #read histograms for curent mode
-    ROOT.gROOT.ProcessLine(f'TH2D* M_DATA = (TH2D*)tf->Get("M_DATA");')
-    ROOT.gROOT.ProcessLine(f'TH2D* M_SIG = (TH2D*)tf->Get("M_SIG");')
-    ROOT.gROOT.ProcessLine(f'TH2D* M_BKG = (TH2D*)tf->Get("M_SIG");')
-    ROOT.gROOT.ProcessLine(f'TH2D* M_GEN = (TH2D*)tf->Get("M_SIG");')
-    ROOT.gROOT.ProcessLine(f'TH2D* A_DATA = (TH2D*)tf->Get("A_DATA");')
-    ROOT.gROOT.ProcessLine(f'TH2D* A_SIG = (TH2D*)tf->Get("A_SIG");')  
-    ROOT.gROOT.ProcessLine(f'TH2D* A_BKG = (TH2D*)tf->Get("A_SIG");')
-    ROOT.gROOT.ProcessLine(f'TH2D* A_GEN = (TH2D*)tf->Get("A_SIG");')
-    
-    # for typ in list(ntuples.keys())[:-1]:
-    for typ in list(ntuples.keys())[-1:]:
-        for sample in ntuples[typ]:
-            #make RDataFrame object for current dataset
-            rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
-            quants = list(rdf.GetColumnNames())
-            
-            rdf = rdf.Define(
-                "M_1",
-                f"M_{typ}->GetBinContent(M_{typ}->FindBin(eta_1, phi_1))"
-            )
-            rdf = rdf.Define(
-                "M_2",
-                f"M_{typ}->GetBinContent(M_{typ}->FindBin(eta_2, phi_2))"
-            )
-            rdf = rdf.Define(
-                "A_1",
-                f"A_{typ}->GetBinContent(A_{typ}->FindBin(eta_1, phi_1))"
-            )
-            rdf = rdf.Define(
-                "A_2",
-                f"A_{typ}->GetBinContent(A_{typ}->FindBin(eta_2, phi_2))"
-            )
-            rdf = rdf.Define(f"pt_1_roccor", f"1./(1./pt_1 * M_1 + charge_1 * A_1)")
-            rdf = rdf.Define(f"pt_2_roccor", f"1./(1./pt_2 * M_2 + charge_2 * A_2)")
-
-            #calculate corrected 4-momenta and corrected Z-mass
-            rdf = rdf.Define(f"p4_1", f"ROOT::Math::PtEtaPhiMVector(pt_1_roccor, eta_1, phi_1, mass_1)")
-            rdf = rdf.Define(f"p4_2", f"ROOT::Math::PtEtaPhiMVector(pt_2_roccor, eta_2, phi_2, mass_2)")
-            rdf = rdf.Define(f"p4_Z", f"p4_1 + p4_2")
-            rdf = rdf.Define(f"mass_Z_roccor", f"p4_Z.M()")
-
-            #add calculated quantities to quantities
-            quants += [f"pt_1_roccor", f"pt_2_roccor", f"mass_Z_roccor"]
-                
-            #save everything in new ntuple
-            rdf.Snapshot("Events", ntuples[typ][sample].replace('.root', '_corr.root'), quants)
-            #print("done:", sample)
-
-    print(f"Finished application of scale corrections in {time() - t0}s.")

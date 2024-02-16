@@ -4,16 +4,15 @@ import matplotlib.pyplot as plt
 from array import array
 from argparse import ArgumentParser
 import os
-from time import time
 
 # import modules
 import python.ntuple as ntuple
-import python.scale_corr as corr
+import python.step1 as step1
 import python.plot as plot
 import python.zmass as zmass
-import python.res_corr as rc
-import python.iterative as it
-import python.residual as rs
+import python.step2 as step2
+import python.step3 as step3
+import python.step4 as step4
 
 def parse_args():
     parser = ArgumentParser(
@@ -30,52 +29,32 @@ def parse_args():
         help="produce ntuples from NanoAOD"
     )
     parser.add_argument(
-        '-S',
+        '-1',
         '--scale',
         action='store_true',
         default=False,
         help="Make scale correction"
     )
     parser.add_argument(
-        '-G',
-        '--gen_cor',
-        default=False,
-        action='store_true',
-        help='Correct GEN-ntuple-reco values with MC-SIG kappa and lambda from 1/pt correction')
-    parser.add_argument(
-        '-R',
-        '--res',
+        '-2',
+        '--resolution',
         default=False,
         action='store_true',
         help='Make Resolution calculation'
     )
     parser.add_argument(
-    '-I',
-    '--iterative',
-    default=False,
-    action='store_true',
-    help='Make iterative correction'
-    )
-    parser.add_argument(
-    '-F',
-    '--residual_fit',
-    default=False,
-    action='store_true',
-    help='Residual_correction'
-    )
-    parser.add_argument(
-        '-P',
-        '--plot',
+        '-3',
+        '--iterative',
         default=False,
         action='store_true',
-        help='Make plots'
+        help='Make iterative correction'
     )
     parser.add_argument(
-        '-Z',
-        '--zmass',
+        '-4',
+        '--residual',
         default=False,
         action='store_true',
-        help='Check Z mass'
+        help='Residual_correction'
     )
     args = parser.parse_args()
     return args
@@ -148,48 +127,32 @@ if __name__=='__main__':
 
     if args.scale:
         os.makedirs(hdir, exist_ok=True)
-        corr.hist_oneOverpT(ntuples_zPt, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir)
-        corr.get_scale_corrections(samples_to_plot, eta_bins, phi_bins, charge_bins, hdir)
-        corr.apply_scale_corrections(ntuples_zPt, hdir)
-        corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_roccor')
+        step1.hist_oneOverpT(ntuples_zPt, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir)
+        step1.get_scale_corrections(samples_to_plot, eta_bins, phi_bins, charge_bins, hdir)
+        # step1.apply_scale_corrections(ntuples_zPt, hdir)
+        # step1.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_roccor')
         
-    if args.plot:
-        os.makedirs(pdir, exist_ok=True)
-        plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "RECREATE")
-        plot.hist_ntuples(ntuples_corr, "mass_Z", len(mass_bins)-1, mass_bins[0], mass_bins[-1], hdir, "mass_z", "update", corr='_roccor')
-        plot.plot_stuff(pdir, eta_bins, phi_bins, corr='_roccor')
-        
-    if args.zmass:
-        zmass.hist_zmass(ntuples_corr, eta_bins, phi_bins, mass_bins, hdir)
-        zmass.fit_zmass(eta_bins, phi_bins, hdir)
-        zmass.plot_zmass(eta_bins, phi_bins, hdir)
+    # if args.zmass:
+    #     zmass.hist_zmass(ntuples_corr, eta_bins, phi_bins, mass_bins, hdir)
+    #     zmass.fit_zmass(eta_bins, phi_bins, hdir)
+    #     zmass.plot_zmass(eta_bins, phi_bins, hdir)
 
-    if args.res:
+    if args.resolution:
         pull_bins=np.linspace(-5,5,100)
         r_bins = np.linspace(0.5, 1.5, 1000)
         abseta_bins=np.linspace(0, 2.4, 13)
         nl_bins=[6.5,8.5,9.5,10.5,11.5,12.5,13.5,17.5]
         pt_bins=[25,30,35,40,50,60,80,110,150,200]
-        # rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, r_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
-        rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
+        step2.get_res_correction(ntuples_zPt["GEN"]["GEN"], pull_bins, r_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
+        step2.plot_closure(ntuples_zPtples["GEN"]["GEN"], hdir, pdir)
 
     if args.iterative:
-        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr_smeared.root"
-        it.iterative_correction(samples=ntuples_corr, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
-        it.apply_iterative_correction(samples=ntuples_corr, hdir=hdir)
-        it.plot_closure(samples=ntuples_corr, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=20)
+        step3.iterative_correction(samples=ntuples_zPt, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
+        step3.plot_closure(samples=ntuples_zPt, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=20)
 
-    if args.residual_fit:
-        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr_smeared.root"
-        ntuples_corr["SIG"]["SIG"]=f"{datadir}DY_zPt_corr_it.root"
-        ntuples_corr["DATA"]["DATA"]=f"{datadir}DATA_zPt_corr_it.root"
-        ntuples_corr["BKG"]["WW"]=f"{datadir}WW_zPt_corr_it.root"
-        ntuples_corr["BKG"]["TT"]=f"{datadir}TT_zPt_corr_it.root"
-        ntuples_corr["BKG"]["WZ"]=f"{datadir}WZ_zPt_corr_it.root"
-        ntuples_corr["BKG"]["ZZ"]=f"{datadir}ZZ_zPt_corr_it.root"
+    if args.residual:
         abseta_bins=np.linspace(0, 2.4, 13)
 
-        # rs.residual_correction(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
-        # rs.perform_fits(ntuples_corr, abseta_bins, hdir, pdir)
-        rs.apply_res_corr(ntuples_corr, hdir, pdir)
-        #rs.plot_result(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
+        step4.residual_correction(samples=ntuples_zPt, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
+        step4.perform_fits(ntuples_zPt, abseta_bins, hdir, pdir)
+        step4.plot_closure(ntuples_zPt, hdir, pdir)

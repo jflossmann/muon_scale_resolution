@@ -1,5 +1,3 @@
-import uproot
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -8,6 +6,7 @@ from array import array
 from python.plot import plot_ratio
 import os
 from time import time
+from python.apply_corrections import step1, step2
 
 def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
     iterationsteps = 20
@@ -19,6 +18,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
     print(samples['GEN']['GEN'])
 
     df_gen = ROOT.RDataFrame('Events', samples['GEN']['GEN'])
+    df_gen = step1(df_gen, hdir, 'GEN')
+    df_gen = step2(df_gen, hdir, 'GEN')
     df_gen = df_gen.Filter('genmass_Z_smeared > 86 && genmass_Z_smeared < 96')
 
     h_gen_n = df_gen.Histo3D(
@@ -82,6 +83,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
 
                 #read data into dataframe
                 df_reco = ROOT.RDataFrame('Events', samples[typ][subtyp])
+                df_reco = step1(df_reco, hdir, typ)
                 df_reco = df_reco.Define(f'mass_Z_roccor_it', 'mass_Z_roccor')
                 df_reco = df_reco.Define('pt_1_roccor_it', 'pt_1_roccor')
                 df_reco = df_reco.Define('pt_2_roccor_it', 'pt_2_roccor')
@@ -96,7 +98,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
 
                 for i in tqdm(range(iterationsteps)):
 
-                    # t0 = time()
                     h_reco_n = df_reco_f.Histo3D(
                         (
                             f'h_reco_n_it{i}', '',
@@ -145,8 +146,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         'phi_2',
                         f'masspt_2'
                     )
-                    # t1 = time()
-                    # print(f"histogramming took {round(t1-t0, 2)}s")
 
                     reco_means_n = h_reco_n.Project3DProfile(option='yx')
                     reco_means_p = h_reco_p.Project3DProfile(option='yx')
@@ -185,9 +184,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                             h_kappa.SetBinContent(eta+1, phi+1, kappa_it)
                             h_lambd.SetBinContent(eta+1, phi+1, lambd_it)
 
-                    # t2 = time()
-                    # print(f"loop took {round(t2-t1,2)}s")
-
                     tf = ROOT.TFile(f'{hdir}step3_it.root', 'recreate')
                     h_kappa.Write()
                     h_lambd.Write()
@@ -221,9 +217,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                     df_reco_f = df_reco.Filter(f'{mass} > 86 && {mass} < 96')
                     df_reco_f = df_reco.Filter(f'abs(eta_1) < 2.4 && abs(eta_2) < 2.4')
 
-                    # t3 = time()
-                    # print(f"Redefinition and Filtering took {round(t3-t2, 2)}s")
-
                 tf = ROOT.TFile(f'{hdir}step3_it_{typ}.root', 'recreate')
                 h_kappa.Write()
                 h_lambd.Write()
@@ -241,49 +234,6 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
             reco_means.Write()
             gen_means.Write()
             tf.Close()
-
-
-def apply_iterative_correction(samples, hdir):
-    for typ in ['SIG', 'DATA']:
-        ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step3_it_{typ}.root", "READ");')
-        ROOT.gROOT.ProcessLine(f'TH2D* h_kappa_{typ} = (TH2D*)tf->Get("M_{typ}");')
-        ROOT.gROOT.ProcessLine(f'h_kappa_{typ}->SetDirectory(nullptr);')
-        ROOT.gROOT.ProcessLine(f'TH2D* h_lambd_{typ} = (TH2D*)tf->Get("A_{typ}");')
-        ROOT.gROOT.ProcessLine(f'h_lambd_{typ}->SetDirectory(nullptr);')
-        ROOT.gROOT.ProcessLine(f'tf->Close();')
-
-
-    for typ in samples:
-        if typ == 'GEN': continue
-        for subtyp in samples[typ]:
-            if typ == 'DATA':
-                dtsg = 'DATA'
-            else:
-                dtsg = 'SIG'
-
-            df = ROOT.RDataFrame("Events", samples[typ][subtyp])
-
-            df = df.Define(
-                f"pt_1_roccor_it",
-                f"double pt;\
-                pt = 1./ (h_kappa_{dtsg}->GetBinContent( h_kappa_{dtsg}->GetXaxis()->FindBin(eta_1) , h_kappa_{dtsg}->GetYaxis()->FindBin(phi_1) ) / pt_1 - \
-                h_lambd_{dtsg}->GetBinContent( h_lambd_{dtsg}->GetXaxis()->FindBin(eta_1) , h_lambd_{dtsg}->GetYaxis()->FindBin(phi_1) ));\
-                return pt;"
-            )
-            df = df.Define(
-                f"pt_2_roccor_it",
-                f"1./ (h_kappa_{dtsg}->GetBinContent( h_kappa_{dtsg}->GetXaxis()->FindBin(eta_2) , h_kappa_{dtsg}->GetYaxis()->FindBin(phi_2) ) / pt_2 + \
-                h_lambd_{dtsg}->GetBinContent( h_lambd_{dtsg}->GetXaxis()->FindBin(eta_2) , h_lambd_{dtsg}->GetYaxis()->FindBin(phi_2) ))"
-            )
-            df = df.Define(
-                f"mass_Z_roccor_it",
-                f"sqrt( 2 * pt_1_roccor_it * pt_2_roccor_it * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)) )"
-            )            
-
-            #save results
-            print(f"saving corrected dfs to {samples[typ][subtyp]}")
-            df.Snapshot("Events", samples[typ][subtyp].replace('.root', '_it.root'))
-            print("done")
 
 
 def plot_closure(hdir, pdir, samples, eta_bins, phi_bins, iterationsteps):

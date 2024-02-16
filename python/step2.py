@@ -1,18 +1,11 @@
-import uproot
-import warnings
-warnings.simplefilter(action='ignore', category=UserWarning)
-
-import pandas as pd
-pd.set_option('mode.chained_assignment', None)
 import numpy as np
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 import ROOT
 import os
-import json
 from array import array
 from time import time
 from python.plot import plot_ratio
+from python.apply_corrections import step1, step2
 
 
 def get_res_correction(
@@ -34,6 +27,8 @@ def get_res_correction(
     
     #read data
     df = ROOT.RDataFrame("Events", ntuples_gen)
+
+    df = step1(df, hdir, 'GEN')
 
     df = df.Define("abseta_1", "abs(eta_1)")
     df = df.Define("abseta_2", "abs(eta_2)")
@@ -118,8 +113,6 @@ def get_res_correction(
         pull2 = (R_2 - mean_hist->GetBinContent(etabin_2, nlbin_2)) / sigma_2;\
         return pull2;'
     )
-
-    print(df.Mean("abseta_2").GetValue())
 
     h_3d_pull1 = df.Histo3D(
         (
@@ -301,16 +294,11 @@ def get_res_correction(
     h_results_cb.Write()
     h_results_poly.Write()
     tf.Close()
-    
-
-# ROOT.gInterpreter.Declare("""
-#         float gaus(){
-#             return gRandom->Gaus(0,1);
-#         }
-#         """)
 
 
-def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
+
+
+def plot_closure(ntuples_gen, hdir, pdir):
     use_CB_smear=True
     pdir = pdir+'resolution/'
     
@@ -322,161 +310,109 @@ def apply_res_corr(ntuples_gen, hdir, pdir, do_plot, do_binwise_plot=False):
 
     df = ROOT.RDataFrame("Events", ntuples_gen)
 
-    df = df.Define("abseta_1", "abs(eta_1)")
-    df = df.Define("abseta_2", "abs(eta_2)")
+    df = step1(df, hdir, 'GEN')
+    df = step2(df, hdir, 'GEN')
 
-    df = df.Define("R_1", "genpt_1/pt_1_roccor")
-    df = df.Define("R_2", "genpt_2/pt_2_roccor")
+    m_bins = np.linspace(60, 120, 60)
 
-    df = df.Filter(
-        "abseta_1 < 2.4 && abseta_2 < 2.4 &&\
-        nTrkLayers_1 > 6.5 && nTrkLayers_1 < 17.5 && \
-        nTrkLayers_2 > 6.5 && nTrkLayers_2 < 17.5"
-    )
-
-    df = df.Define(
-        "genpt_1_smeared",
-        'double pt1;\
-        Int_t etabin1 = h_results_cb->GetXaxis()->FindBin(abseta_1);\
-        Int_t nlbin1 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_1);\
-        double sig_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 2);\
-        double sig_poly1_a = h_results_poly->GetBinContent(etabin1, nlbin1, 1);\
-        double sig_poly1_b = h_results_poly->GetBinContent(etabin1, nlbin1, 2);\
-        double sig_poly1_c = h_results_poly->GetBinContent(etabin1, nlbin1, 3);\
-        double sig_poly1 = sig_poly1_a + sig_poly1_b * genpt_1 + sig_poly1_c * genpt_1*genpt_1;\
-        double sig1 = sig_cb1 * sig_poly1;\
-        if (sig1 < 0) sig1 = 0;\
-        pt1 = genpt_1 * ( 1 + sig1 * (float)(gaus()));\
-        return pt1;'
-    )
-
-    df = df.Define(
-        "genpt_2_smeared",
-        "double pt2;\
-        Int_t etabin2 = h_results_cb->GetXaxis()->FindBin(abseta_2);\
-        Int_t nlbin2 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_2);\
-        double sig_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 2);\
-        double sig_poly2_a = h_results_poly->GetBinContent(etabin2, nlbin2, 1);\
-        double sig_poly2_b = h_results_poly->GetBinContent(etabin2, nlbin2, 2);\
-        double sig_poly2_c = h_results_poly->GetBinContent(etabin2, nlbin2, 3);\
-        double sig_poly2 = sig_poly2_a + sig_poly2_b * genpt_2 + sig_poly2_c * genpt_2*genpt_2;\
-        double sig2 = sig_cb2 * sig_poly2;\
-        if (sig2 < 0) sig2 = 0;\
-        pt2 = genpt_2 * ( 1 + sig2 * (float)(gaus()));\
-        return pt2;"
-    )
-
-    df = df.Define(
-        "genmass_Z_smeared",
-        "sqrt(2 * genpt_1_smeared * genpt_2_smeared * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
-    )
-
-
-    if do_plot:
-
-        m_bins = np.linspace(60, 120, 60)
-
-        hists = [
-            df.Histo1D(
-                (
-                    'h_gen', '',
-                    len(m_bins)-1, array('d', m_bins)
-                ),
-                'genmass_Z'
+    hists = [
+        df.Histo1D(
+            (
+                'h_gen', '',
+                len(m_bins)-1, array('d', m_bins)
             ),
-            df.Histo1D(
-                (
-                    'h_gen_smeared', '',
-                    len(m_bins)-1, array('d', m_bins)
-                ),
-                'genmass_Z_smeared'
+            'genmass_Z'
+        ),
+        df.Histo1D(
+            (
+                'h_gen_smeared', '',
+                len(m_bins)-1, array('d', m_bins)
             ),
-            df.Histo1D(
-                (
-                    'h_mc', '',
-                    len(m_bins)-1, array('d', m_bins)
-                ),
-                'mass_Z_roccor'
+            'genmass_Z_smeared'
+        ),
+        df.Histo1D(
+            (
+                'h_mc', '',
+                len(m_bins)-1, array('d', m_bins)
             ),
-        ]
+            'mass_Z_roccor'
+        ),
+    ]
 
-        m_bins = np.linspace(86, 96, 60)
+    m_bins = np.linspace(86, 96, 60)
 
-        hists += [
-            df.Histo1D(
-                (
-                    'h_gen_zoom', '',
-                    len(m_bins)-1, array('d', m_bins)
-                ),
-                'genmass_Z'
+    hists += [
+        df.Histo1D(
+            (
+                'h_gen_zoom', '',
+                len(m_bins)-1, array('d', m_bins)
             ),
-            df.Histo1D(
-                (
-                    'h_gen_smeared_zoom', '',
-                    len(m_bins)-1, array('d', m_bins)
-                ),
-                'genmass_Z_smeared'
+            'genmass_Z'
+        ),
+        df.Histo1D(
+            (
+                'h_gen_smeared_zoom', '',
+                len(m_bins)-1, array('d', m_bins)
             ),
-            df.Histo1D(
-                (
-                    'h_mc_zoom', '',
-                    len(m_bins)-1, array('d', m_bins)
-                ),
-                'mass_Z_roccor'
-            )
-        ]
-
-        tf = ROOT.TFile(f'{hdir}step2_closure.root', 'recreate')
-        for h in hists:
-            h.Write()
-        tf.Close()
-
-        tf = ROOT.TFile(f'{hdir}step2_closure.root', 'read')
-        h_gen =  tf.Get('h_gen')
-        h_gen.Sumw2()
-        h_gen.Scale(1./h_gen.Integral())
-
-        h_mc = tf.Get('h_gen_smeared')
-        h_mc.Sumw2()
-        h_mc.Scale(1./h_mc.Integral())
-
-        h_dt = tf.Get('h_mc')
-        h_dt.Sumw2()
-        h_dt.Scale(1./h_dt.Integral())
-
-        plot_ratio(
-            hists={
-                'gen': h_gen,
-                'mc': h_mc,
-                'dt': h_dt
-            }, 
-            title='',
-            outfile=f'{pdir}Z_mass_comparison',
-            text=['','',''],
-            #xrange=[60, 120],
-            labels={
-                'gen': 'Generated mass',
-                'mc': 'smeared Gen Mass',
-                'dt': 'reconstructed Mass'
-            }
+            'genmass_Z_smeared'
+        ),
+        df.Histo1D(
+            (
+                'h_mc_zoom', '',
+                len(m_bins)-1, array('d', m_bins)
+            ),
+            'mass_Z_roccor'
         )
-        plot_ratio(
-            hists={
-                'gen': tf.Get('h_gen_zoom'),
-                'mc': tf.Get('h_gen_smeared_zoom'),
-                'dt': tf.Get('h_mc_zoom')
-            }, 
-            title='',
-            outfile=f'{pdir}Z_mass_comparison_zoom',
-            text=['','',''],
-            #xrange=[86, 96],
-            ratio_range=[0.9, 1.1],
-            labels={
-                'gen': 'Generated mass',
-                'mc': 'smeared Gen Mass',
-                'dt': 'reconstructed Mass'
-            }
-        )
+    ]
 
-    #save data
-    df.Snapshot("Events", ntuples_gen.replace('.root', '_smeared.root'))
+    tf = ROOT.TFile(f'{hdir}step2_closure.root', 'recreate')
+    for h in hists:
+        h.Write()
+    tf.Close()
+
+    tf = ROOT.TFile(f'{hdir}step2_closure.root', 'read')
+    h_gen =  tf.Get('h_gen')
+    h_gen.Sumw2()
+    h_gen.Scale(1./h_gen.Integral())
+
+    h_mc = tf.Get('h_gen_smeared')
+    h_mc.Sumw2()
+    h_mc.Scale(1./h_mc.Integral())
+
+    h_dt = tf.Get('h_mc')
+    h_dt.Sumw2()
+    h_dt.Scale(1./h_dt.Integral())
+
+    plot_ratio(
+        hists={
+            'gen': h_gen,
+            'mc': h_mc,
+            'dt': h_dt
+        }, 
+        title='',
+        outfile=f'{pdir}Z_mass_comparison',
+        text=['','',''],
+        #xrange=[60, 120],
+        labels={
+            'gen': 'Generated mass',
+            'mc': 'smeared Gen Mass',
+            'dt': 'reconstructed Mass'
+        }
+    )
+    plot_ratio(
+        hists={
+            'gen': tf.Get('h_gen_zoom'),
+            'mc': tf.Get('h_gen_smeared_zoom'),
+            'dt': tf.Get('h_mc_zoom')
+        }, 
+        title='',
+        outfile=f'{pdir}Z_mass_comparison_zoom',
+        text=['','',''],
+        #xrange=[86, 96],
+        ratio_range=[0.9, 1.1],
+        labels={
+            'gen': 'Generated mass',
+            'mc': 'smeared Gen Mass',
+            'dt': 'reconstructed Mass'
+        }
+    )

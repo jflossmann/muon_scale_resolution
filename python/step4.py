@@ -1,81 +1,24 @@
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import uproot
 from tqdm import tqdm
 import json
 import os
 import ROOT
 from array import array
 from python.plot import roofit_mass, plot_ratio
-
-def minfinder(fun, args, bounds, n=10, N=10):
-    i=0
-    while i<N:
-        X2=[]
-        K=[]
-        width=(bounds[1]-bounds[0])/n
-        for k in np.linspace(bounds[0],bounds[1],n+1):
-            X2.append(fun(k,*args))
-            K.append(k)
-        m=np.argmin(X2)
-
-        if m==0:
-            bounds=[bounds[0],K[m]+width]
-        elif m==n:
-            bounds=[K[m]-width,bounds[1]]
-        else:
-            bounds=[K[m]-width,K[m]+width]
-        
-        i+=1
-        print(m, K[m], X2[m])
-    return K[m]
-
-def chi2(k, z1, z2, df_gen, reco_hist, bins=50, rang=[81,101]):
-
-    #reconstruct Z-Mass with smearing
-    MZ=np.sqrt( 2*(1+k*z1)*(1+k*z2)*df_gen.genpt_1_smeared*df_gen.genpt_2_smeared*(np.cosh(df_gen.geneta_1-df_gen.geneta_2)-np.cos(df_gen.genphi_1-df_gen.genphi_2)) )
-    
-    #make histogram
-    gen_hist=np.histogram(MZ, bins=bins, range=rang, density=True)
-
-    #calc chi2/me/mse
-    #x2
-    x2=np.sum((gen_hist[0]-reco_hist[0])**2/reco_hist[0])
-    #me
-    #me=np.sum(np.abs(gen_hist[0]-reco_hist[0]))/bins
-    #mse
-    #me=np.sum((gen_hist[0]-reco_hist[0])**2)/bins
-
-    return x2
-
-def chi2_2(k2, k1, z1, z2, df_gen, reco_hist, bins=50, rang=[81,101]):
-    #reconstruct Z-Mass with smearing
-    MZ=np.sqrt( 2*(1+k1*z1)*(1+k2*z2)*df_gen.genpt_1_smeared*df_gen.genpt_2_smeared*(np.cosh(df_gen.geneta_1-df_gen.geneta_2)-np.cos(df_gen.genphi_1-df_gen.genphi_2)) )
-    #make histogram
-    gen_hist=np.histogram(MZ, bins=bins, range=rang, density=True)
-    #calc chi2/me/mse
-    #x2
-    x2=np.sum((gen_hist[0]-reco_hist[0])**2/reco_hist[0])
-    #me
-    #me=np.sum(np.abs(gen_hist[0]-reco_hist[0]))/bins
-    #mse
-    #me=np.sum((gen_hist[0]-reco_hist[0])**2)/bins
-    return x2
+from python.apply_corrections import step1, step2, step3, step4
 
 
 def residual_correction(samples, abseta_bins, hdir, pdir):
 
     #dict for results
-    k_results={}
     m_bins = np.linspace(60, 120, 120)
-    step2=False
     
-    n=8
+    # n=8
     #get gen data
     df_gen = ROOT.RDataFrame("Events", samples["GEN"]["GEN"])
-    # df_gen = df_gen.Define("abseta_1", "abs(eta_1)"). Define("abseta_2", "abs(eta_2)")
-    # df_gen = df_gen.Filter("abseta_1 < 2.4 && abseta_2 < 2.4")
+    df_gen = step1(df_gen, hdir, 'GEN')
+    df_gen = step2(df_gen, hdir, 'GEN')
+    df_gen = df_gen.Define("abseta_1", "abs(eta_1)").Define("abseta_2", "abs(eta_2)")
 
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step2_fitresults.root", "read");')
     ROOT.gROOT.ProcessLine(f'TH3D* h_results_cb = (TH3D*)tf->Get("h_results_cb");')
@@ -125,6 +68,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                 
                 #read data into dataframe
                 df_reco = ROOT.RDataFrame("Events", samples[typ][subtyp])
+                df_reco = step1(df_reco, hdir, typ)
+                df_reco = step3(df_reco, hdir, typ)
                 df_reco = df_reco.Define("abseta_1", "abs(eta_1)")
                 df_reco = df_reco.Define("abseta_2", "abs(eta_2)")
                 df_reco = df_reco.Filter("abseta_1 < 2.4 && abseta_2 < 2.4")
@@ -175,6 +120,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                     h_gen_smeared.Write()
                 tf.Close()
 
+
 def perform_fits(samples, abseta_bins, hdir, pdir):
 
     hists = []
@@ -216,7 +162,7 @@ def perform_fits(samples, abseta_bins, hdir, pdir):
 
 
 
-def apply_res_corr(samples, hdir, pdir):
+def plot_closure(samples, hdir, pdir):
     pdir += 'residual/'
     m_bins = np.linspace(80, 102, 44)
     hists = []
@@ -225,29 +171,14 @@ def apply_res_corr(samples, hdir, pdir):
         first = 1
         for subtyp in samples[typ]:
             df = ROOT.RDataFrame("Events", samples[typ][subtyp])
+
+            df = step1(df, hdir, typ)
+            df = step2(df, hdir, typ)
+            df = step3(df, hdir, typ)
+            df = step4(df, hdir, typ)
             
             if typ == 'GEN':
-                ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step4_k.root", "read");')
-
-                for dtsg in ['DATA', 'SIG']:
-
-                    ROOT.gROOT.ProcessLine(f'TH1D* h_k_{dtsg} = (TH1D*)tf->Get("h_k_{dtsg}");')
-
-                    df = df.Define(
-                        f"genpt_1_smeared_{dtsg}", 
-                        f"genpt_1 * (1 + h_k_{dtsg}->GetBinContent(h_k_{dtsg}->FindBin(abs(eta_1))) * (genpt_1_smeared/genpt_1 - 1))"
-                    )
-                    df = df.Define(
-                        f"genpt_2_smeared_{dtsg}", 
-                        f"genpt_2 * (1 + h_k_{dtsg}->GetBinContent(h_k_{dtsg}->FindBin(abs(eta_2))) * (genpt_2_smeared/genpt_2 - 1))"
-                    )
-                    df = df.Define(
-                        f"genmass_Z_smeared_{dtsg}",
-                        f"sqrt(2 * genpt_1_smeared_{dtsg} * genpt_2_smeared_{dtsg} * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
-                    )
-
                 h_names = ['genmass_Z_smeared_SIG', 'genmass_Z_smeared_DATA', 'genmass_Z_smeared']
-
             else: 
                 h_names = ['mass_Z_roccor_it']
 
