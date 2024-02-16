@@ -13,7 +13,7 @@ import python.plot as plot
 import python.zmass as zmass
 import python.res_corr as rc
 import python.iterative as it
-import python.resid as rs
+import python.residual as rs
 
 def parse_args():
     parser = ArgumentParser(
@@ -126,7 +126,7 @@ if __name__=='__main__':
             'ZZ': f"{datadir}ZZ_zPt_corr.root",
             'TT': f"{datadir}TT_zPt_corr.root",
         },
-        'GEN': {'GEN': f"{datadir}GEN_zPt.root"}
+        'GEN': {'GEN': f"{datadir}GEN_zPt_corr.root"}
     }
 
     sf_path = 'data/scaleFactors/Run2/UL/2018/2018_Z/Efficiencies_muon_generalTracks_Z_Run2018_UL_'
@@ -138,6 +138,7 @@ if __name__=='__main__':
     pdir = 'plots/'
 
     args = parse_args()
+    ROOT.gROOT.SetBatch()
 
     if args.ntuples:
         # ntuple.make_ntuples(nanoAODs, datasets, datadir)
@@ -151,10 +152,6 @@ if __name__=='__main__':
         corr.get_scale_corrections(samples_to_plot, eta_bins, phi_bins, charge_bins, hdir)
         corr.apply_scale_corrections(ntuples_zPt, hdir)
         corr.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_roccor')
-
-        #correct gen-reco-values with mc-reco parameters
-        #rc.cor_gen(ntuples_corr["GEN"]["GEN"],ntuples_corr['SIG']['SIG'], eta_bins=eta_bins, phi_bins=phi_bins)
-        #ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
         
     if args.plot:
         os.makedirs(pdir, exist_ok=True)
@@ -169,21 +166,30 @@ if __name__=='__main__':
 
     if args.res:
         pull_bins=np.linspace(-5,5,100)
+        r_bins = np.linspace(0.5, 1.5, 1000)
         abseta_bins=np.linspace(0, 2.4, 13)
-        rc.cor_gen(ntuples_corr["GEN"]["GEN"],ntuples_corr['SIG']['SIG'], eta_bins=eta_bins, phi_bins=phi_bins)
-        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
-        nl_bins=[6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5]
+        nl_bins=[6.5,8.5,9.5,10.5,11.5,12.5,13.5,17.5]
         pt_bins=[25,30,35,40,50,60,80,110,150,200]
-        rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
+        # rc.get_res_correction(ntuples_corr["GEN"]["GEN"], pull_bins, r_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, do_plot=True)
         rc.apply_res_corr(ntuples_corr["GEN"]["GEN"], hdir, pdir, do_plot=True)
 
     if args.iterative:
-        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr_smeared.root"
         it.iterative_correction(samples=ntuples_corr, eta_bins=eta_bins, phi_bins=phi_bins, hdir=hdir, pdir=pdir)
+        it.apply_iterative_correction(samples=ntuples_corr, hdir=hdir)
+        it.plot_closure(samples=ntuples_corr, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=20)
 
     if args.residual_fit:
-        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr.root"
+        ntuples_corr["GEN"]["GEN"]=f"{datadir}GEN_zPt_corr_smeared.root"
+        ntuples_corr["SIG"]["SIG"]=f"{datadir}DY_zPt_corr_it.root"
+        ntuples_corr["DATA"]["DATA"]=f"{datadir}DATA_zPt_corr_it.root"
+        ntuples_corr["BKG"]["WW"]=f"{datadir}WW_zPt_corr_it.root"
+        ntuples_corr["BKG"]["TT"]=f"{datadir}TT_zPt_corr_it.root"
+        ntuples_corr["BKG"]["WZ"]=f"{datadir}WZ_zPt_corr_it.root"
+        ntuples_corr["BKG"]["ZZ"]=f"{datadir}ZZ_zPt_corr_it.root"
         abseta_bins=np.linspace(0, 2.4, 13)
 
-        rs.residual_correction(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
+        # rs.residual_correction(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
+        # rs.perform_fits(ntuples_corr, abseta_bins, hdir, pdir)
+        rs.apply_res_corr(ntuples_corr, hdir, pdir)
         #rs.plot_result(samples=ntuples_corr, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)

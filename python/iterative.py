@@ -4,293 +4,345 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import ROOT
+from array import array
+from python.plot import plot_ratio
+import os
+from time import time
 
 def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
-    iterationsteps=20
+    iterationsteps = 20
+    mass_bins = np.linspace(86, 96, 100)
+    masspt_bins = np.linspace(0, 1e4, 1000)
+    q_bins = [-1, 0, 1]
+    pdir += 'iterative/'
 
-    #get gen data
-    file=uproot.open(samples["GEN"]["GEN"])
-    print(samples["GEN"]["GEN"])
-    tree=file["Events"]
-    variables=tree.keys()
-    df_GEN=tree.arrays(variables, library="pd")
+    print(samples['GEN']['GEN'])
 
-    #make columns for corrected reconstructed gen-values
-    df_GEN["kappa_1"]=0
-    df_GEN["lambda_1"]=0
-    df_GEN["kappa_2"]=0
-    df_GEN["lambda_2"]=0
+    df_gen = ROOT.RDataFrame('Events', samples['GEN']['GEN'])
+    df_gen = df_gen.Filter('genmass_Z_smeared > 86 && genmass_Z_smeared < 96')
 
-    df_GEN["MASS_Z_COR"]=df_GEN["mass_Z_mean_roccor"]
-    df_GEN["PT_1_COR"]=df_GEN["pt_1_mean_roccor"]
-    df_GEN["PT_2_COR"]=df_GEN["pt_2_mean_roccor"]
+    h_gen_n = df_gen.Histo3D(
+        (
+            'h_gen_n', '',
+            len(eta_bins)-1, array('d', eta_bins),
+            len(phi_bins)-1, array('d', phi_bins),
+            len(mass_bins)-1, array('d', mass_bins)
+        ),
+        'eta_1',
+        'phi_1',
+        'genmass_Z_smeared'
+    )
+    h_gen_p = df_gen.Histo3D(
+        (
+            'h_gen_p', '',
+            len(eta_bins)-1, array('d', eta_bins),
+            len(phi_bins)-1, array('d', phi_bins),
+            len(mass_bins)-1, array('d', mass_bins)
+        ),
+        'eta_2',
+        'phi_2',
+        'genmass_Z_smeared'
+    )
 
-    #cut events with 86<M_z_smeared<96
-    mask_M_Z=(df_GEN.genmass_Z>86) & (df_GEN.genmass_Z<96)
-    df_GEN_m=df_GEN[mask_M_Z]
+    gen_means_n = h_gen_n.Project3DProfile(option='yx')
+    gen_means_p = h_gen_p.Project3DProfile(option='yx')
+
+    gen_means = ROOT.TH2D(
+        f'gen_means', '',
+        len(eta_bins)-1, array('d', eta_bins),
+        len(phi_bins)-1, array('d', phi_bins)
+    )
+    for eta in range(len(eta_bins)-1):
+        for phi in range(len(phi_bins)-1):
+            gen_means.SetBinContent(
+                eta+1, phi+1, 
+                .5*(gen_means_n.GetBinContent(eta+1, phi+1) + gen_means_p.GetBinContent(eta+1, phi+1))
+                )
 
     for typ in samples:
         if typ == "SIG" or typ=="DATA":
+            # if typ == "SIG":
+
+            reco_means = ROOT.TH3D(
+                f'reco_means_{typ}', '',
+                iterationsteps, array('d', np.linspace(-0.5, iterationsteps-0.5, iterationsteps+1)),
+                len(eta_bins)-1, array('d', eta_bins),
+                len(phi_bins)-1, array('d', phi_bins)
+            )
+
             for subtyp in samples[typ]:
                 print(f"now processing {subtyp}")
 
+                tf = ROOT.TFile(f'{hdir}C.root', 'read')
+                h_kappa = tf.Get(f'M_{typ}')
+                h_kappa.SetDirectory(ROOT.nullptr)
+                h_lambd = tf.Get(f'A_{typ}')
+                h_lambd.SetDirectory(ROOT.nullptr)
+                tf.Close()
+
                 #read data into dataframe
-                file=uproot.open(samples[typ][subtyp])
-                tree=file["Events"]
-                variables=tree.keys()
-                df_RECO=tree.arrays(variables, library="pd")
+                df_reco = ROOT.RDataFrame('Events', samples[typ][subtyp])
+                df_reco = df_reco.Define(f'mass_Z_roccor_it', 'mass_Z_roccor')
+                df_reco = df_reco.Define('pt_1_roccor_it', 'pt_1_roccor')
+                df_reco = df_reco.Define('pt_2_roccor_it', 'pt_2_roccor')
+                df_reco = df_reco.Define('masspt_1', 'mass_Z_roccor * pt_1_roccor')
+                df_reco = df_reco.Define('masspt_2', 'mass_Z_roccor * pt_2_roccor')
 
-                df_RECO["kappa_1"]=0
-                df_RECO["lambda_1"]=0
-                df_RECO["kappa_2"]=0
-                df_RECO["lambda_2"]=0
 
-                df_RECO["MASS_Z_COR"]=df_RECO["mass_Z_mean_roccor"]
-                df_RECO["PT_1_COR"]=df_RECO["pt_1_mean_roccor"]
-                df_RECO["PT_2_COR"]=df_RECO["pt_2_mean_roccor"]
+                mass = f'mass_Z_roccor_it'
 
-                #table for kappa and lambda
-                #... import from first step
-                kappa_table, lambda_table=get_k_l(df_RECO=df_RECO, eta_bins=eta_bins, phi_bins=phi_bins)
+                df_reco_f = df_reco.Filter(f'{mass} > 86 && {mass} < 96')
+                df_reco_f = df_reco.Filter(f'abs(eta_1) < 2.4 && abs(eta_2) < 2.4')
 
-                iterations=[]
-                gen_means=[]
-                reco_means=[]
-                
-                VM=[]
-                VP=[]
-                for n in tqdm(range(iterationsteps)):
-                    iterations.append(n+1)
-                    print("iteration ",n+1)
-                    print("calc correction")
+                for i in tqdm(range(iterationsteps)):
 
-                    #mass cut on working region
-                    M_Z_filter_RECO=(86<df_RECO["MASS_Z_COR"]) & (df_RECO["MASS_Z_COR"]<96)
-                    df_RECO_m=df_RECO[M_Z_filter_RECO]
+                    # t0 = time()
+                    h_reco_n = df_reco_f.Histo3D(
+                        (
+                            f'h_reco_n_it{i}', '',
+                            len(eta_bins)-1, array('d', eta_bins),
+                            len(phi_bins)-1, array('d', phi_bins),
+                            len(mass_bins)-1, array('d', mass_bins)
+                        ),
+                        'eta_1',
+                        'phi_1',
+                        mass
+                    )
+                    h_reco_p = df_reco_f.Histo3D(
+                        (
+                            f'h_reco_p_it{i}', '',
+                            len(eta_bins)-1, array('d', eta_bins),
+                            len(phi_bins)-1, array('d', phi_bins),
+                            len(mass_bins)-1, array('d', mass_bins)
+                        ),
+                        'eta_2',
+                        'phi_2',
+                        mass
+                    )
 
-                    #loops to get correction
-                    VM_n=[]
-                    VP_n=[]
+                    df_reco_f = df_reco_f.Redefine(f"masspt_1", f"{mass} * pt_1_roccor_it")
+                    df_reco_f = df_reco_f.Redefine(f"masspt_2", f"{mass} * pt_2_roccor_it")
 
-                    reco_means.append([])
-                    gen_means.append([])
-                    for i in range(len(eta_bins)-1):
-                        #filter for eta bin
-                        eta_1_filter_RECO=(eta_bins[i]<df_RECO_m["eta_1"]) & (df_RECO_m["eta_1"]<=eta_bins[i+1])
-                        eta_2_filter_RECO=(eta_bins[i]<df_RECO_m["eta_2"]) & (df_RECO_m["eta_2"]<=eta_bins[i+1])
-                        df_RECO_me1=df_RECO_m[eta_1_filter_RECO]
-                        df_RECO_me2=df_RECO_m[eta_2_filter_RECO]
+                    h_reco_mpt_n = df_reco_f.Histo3D(
+                        (
+                            f'h_reco_mpt_n_it{i}', '',
+                            len(eta_bins)-1, array('d', eta_bins),
+                            len(phi_bins)-1, array('d', phi_bins),
+                            len(masspt_bins)-1, array('d', masspt_bins)
+                        ),
+                        'eta_1',
+                        'phi_1',
+                        f'masspt_1'
+                    )
+                    h_reco_mpt_p = df_reco_f.Histo3D(
+                        (
+                            f'h_reco_mpt_p_it{i}', '',
+                            len(eta_bins)-1, array('d', eta_bins),
+                            len(phi_bins)-1, array('d', phi_bins),
+                            len(masspt_bins)-1, array('d', masspt_bins)
+                        ),
+                        'eta_2',
+                        'phi_2',
+                        f'masspt_2'
+                    )
+                    # t1 = time()
+                    # print(f"histogramming took {round(t1-t0, 2)}s")
 
-                        eta_1_filter_GEN=(eta_bins[i]<df_GEN_m["geneta_1"]) & (df_GEN_m["geneta_1"]<=eta_bins[i+1])
-                        eta_2_filter_GEN=(eta_bins[i]<df_GEN_m["geneta_2"]) & (df_GEN_m["geneta_2"]<=eta_bins[i+1]) 
-                        df_GEN_me1=df_GEN_m[eta_1_filter_GEN]
-                        df_GEN_me2=df_GEN_m[eta_2_filter_GEN]
+                    reco_means_n = h_reco_n.Project3DProfile(option='yx')
+                    reco_means_p = h_reco_p.Project3DProfile(option='yx')
+                    reco_means_mpt_n = h_reco_mpt_n.Project3DProfile(option='yx')
+                    reco_means_mpt_p = h_reco_mpt_p.Project3DProfile(option='yx')
 
-                        gen_means[n].append([])
-                        reco_means[n].append([])
-                        for j in range(len(phi_bins)-1):
-                            phi_1_filter_RECO=(phi_bins[j]<df_RECO_me1["phi_1"]) & (df_RECO_me1["phi_1"]<=phi_bins[j+1])
-                            phi_2_filter_RECO=(phi_bins[j]<df_RECO_me2["phi_2"]) & (df_RECO_me2["phi_2"]<=phi_bins[j+1])
-                            df_RECO_mep1=df_RECO_me1[phi_1_filter_RECO]
-                            df_RECO_mep2=df_RECO_me2[phi_2_filter_RECO]
+                    for eta in range(len(eta_bins)-1):
+                        for phi in range(len(phi_bins)-1):
+                            reco_mean_n = reco_means_n.GetBinContent(eta+1, phi+1)
+                            reco_mean_p = reco_means_p.GetBinContent(eta+1, phi+1)
+                            gen_mean_n = gen_means_n.GetBinContent(eta+1, phi+1)
+                            gen_mean_p = gen_means_p.GetBinContent(eta+1, phi+1)
 
-                            phi_1_filter_GEN=(phi_bins[j]<df_GEN_me1["genphi_1"]) & (df_GEN_me1["genphi_1"]<=phi_bins[j+1])
-                            phi_2_filter_GEN=(phi_bins[j]<df_GEN_me2["genphi_2"]) & (df_GEN_me2["genphi_2"]<=phi_bins[j+1])
-                            df_GEN_mep1=df_GEN_me1[phi_1_filter_GEN]
-                            df_GEN_mep2=df_GEN_me2[phi_2_filter_GEN]
-  
-                            gen_means[n][i].append(np.mean(df_GEN_mep1["genmass_Z"]))
-                            reco_means[n][i].append(np.mean(df_RECO_mep1["MASS_Z_COR"]))
+                            reco_means.SetBinContent(
+                                i+1, eta+1, phi+1,
+                                .5*(reco_mean_n + reco_mean_p)
+                                )
 
-                            #calculate correction
-                            Vp=-2*(np.mean(df_GEN_mep2["genmass_Z"])-np.mean(df_RECO_mep2["MASS_Z_COR"]))
-                            VP_n.append(Vp)
-                            Vm=-2*(np.mean(df_GEN_mep1["genmass_Z"])-np.mean(df_RECO_mep1["MASS_Z_COR"]))
-                            VM_n.append(Vm)
-                            Mp=2*np.mean(df_RECO_mep2["MASS_Z_COR"])
-                            Mm=2*np.mean(df_RECO_mep1["MASS_Z_COR"])
-                            Kp=np.mean(df_RECO_mep2["PT_2_COR"]*df_RECO_mep2["MASS_Z_COR"])
-                            Km=-np.mean(df_RECO_mep1["PT_1_COR"]*df_RECO_mep1["MASS_Z_COR"])
-                            kappa, lambd = iterationsfunktion(Mp=Mp, Mm=Mm, Vp=Vp, Vm=Vm, Kp=Kp, Km=Km)
-                            
-                            #update kappa and lambda table for given bin
-                            kappa_table[i][j]=kappa_table[i][j]*kappa
-                            lambda_table[i][j]=kappa*lambda_table[i][j]+lambd
+                            V_n = -2 * (gen_mean_n - reco_mean_n)
+                            V_p = -2 * (gen_mean_p - reco_mean_p)
 
-                    VP.append(np.mean(VP_n))
-                    VM.append(np.mean(VM_n))
+                            if eta==7 and phi==2: print(V_n, V_p)
 
-                    #apply corrections
-                    print("apply correction")
+                            M_n = 2 * reco_mean_n
+                            M_p = 2 * reco_mean_p
 
-                    #correct gen-reco values
-                    if subtyp=="SIG":
-                        for i in range(len(eta_bins)-1):
-                            #filter for eta bin
-                            eta_1_filter=(eta_bins[i]<df_GEN["eta_1"]) & (df_GEN["eta_1"]<=eta_bins[i+1])
-                            eta_2_filter=(eta_bins[i]<df_GEN["eta_2"]) & (df_GEN["eta_2"]<=eta_bins[i+1])
-                            
-                            for j in range(len(phi_bins)-1):
-                                phi_1_filter=(phi_bins[j]<df_GEN["phi_1"]) & (df_GEN["phi_1"]<=phi_bins[j+1])
-                                phi_2_filter=(phi_bins[j]<df_GEN["phi_2"]) & (df_GEN["phi_2"]<=phi_bins[j+1])
-                                
-                                df_GEN.loc[eta_1_filter & phi_1_filter, "kappa_1"]=kappa_table[i][j]
-                                df_GEN.loc[eta_1_filter & phi_1_filter, "lambda_1"]=lambda_table[i][j]
+                            K_n = - reco_means_mpt_n.GetBinContent(eta+1, phi+1)
+                            K_p = reco_means_mpt_p.GetBinContent(eta+1, phi+1)
 
-                                df_GEN.loc[eta_2_filter & phi_2_filter, "kappa_2"]=kappa_table[i][j]
-                                df_GEN.loc[eta_2_filter & phi_2_filter, "lambda_2"]=lambda_table[i][j]
+                            kappa = (V_p / K_p - V_n / K_n) / (M_p / K_p - M_n / K_n) + 1
+                            lambd = ((V_p - M_p * (kappa-1)) / K_p + (V_n - M_n * (kappa-1)) / K_n) / 2.
 
-                        #calc correctet muon pt and z_mass
-                        df_GEN["PT_1_COR"]=1/(df_GEN["kappa_1"]/df_GEN["pt_1"] - df_GEN["lambda_1"])
-                        df_GEN["PT_2_COR"]=1/(df_GEN["kappa_2"]/df_GEN["pt_2"] + df_GEN["lambda_2"])
-                        df_GEN["MASS_Z_COR"]=np.sqrt( 2*df_GEN.PT_1_COR*df_GEN.PT_2_COR*(np.cosh(df_GEN.eta_1-df_GEN.eta_2)-np.cos(df_GEN.phi_1-df_GEN.phi_2)))
+                            kappa_it = h_kappa.GetBinContent(eta+1, phi+1) * kappa
+                            lambd_it = h_lambd.GetBinContent(eta+1, phi+1) * kappa + lambd
 
-                        #save corrected gen results
-                        print(f"saving corrected gen to {samples['GEN']['GEN']}")
-                        data={key: df_GEN[key].values for key in df_GEN.columns}
-                        rdf = ROOT.RDF.MakeNumpyDataFrame(data)
-                        rdf.Snapshot("Events", samples["GEN"]["GEN"])
-                        print("done")
+                            h_kappa.SetBinContent(eta+1, phi+1, kappa_it)
+                            h_lambd.SetBinContent(eta+1, phi+1, lambd_it)
 
-                    #correct reco values
-                    for i in range(len(eta_bins)-1):
-                        #filter for eta bin
-                        eta_1_filter=(eta_bins[i]<df_RECO["eta_1"]) & (df_RECO["eta_1"]<=eta_bins[i+1])
-                        eta_2_filter=(eta_bins[i]<df_RECO["eta_2"]) & (df_RECO["eta_2"]<=eta_bins[i+1])
-                        
-                        for j in range(len(phi_bins)-1):
-                            phi_1_filter=(phi_bins[j]<df_RECO["phi_1"]) & (df_RECO["phi_1"]<=phi_bins[j+1])
-                            phi_2_filter=(phi_bins[j]<df_RECO["phi_2"]) & (df_RECO["phi_2"]<=phi_bins[j+1])
-                            
-                            df_RECO.loc[eta_1_filter & phi_1_filter, "kappa_1"]=kappa_table[i][j]
-                            df_RECO.loc[eta_1_filter & phi_1_filter, "lambda_1"]=lambda_table[i][j]
+                    # t2 = time()
+                    # print(f"loop took {round(t2-t1,2)}s")
 
-                            df_RECO.loc[eta_2_filter & phi_2_filter, "kappa_2"]=kappa_table[i][j]
-                            df_RECO.loc[eta_2_filter & phi_2_filter, "lambda_2"]=lambda_table[i][j]
+                    tf = ROOT.TFile(f'{hdir}step3_it.root', 'recreate')
+                    h_kappa.Write()
+                    h_lambd.Write()
+                    tf.Close()
 
-                    #calc correctet muon pt and z_mass
-                    df_RECO["PT_1_COR"]=1/(df_RECO["kappa_1"]/df_RECO["pt_1"] - df_RECO["lambda_1"])
-                    df_RECO["PT_2_COR"]=1/(df_RECO["kappa_2"]/df_RECO["pt_2"] + df_RECO["lambda_2"])
-                    df_RECO["MASS_Z_COR"]=np.sqrt( 2*df_RECO.PT_1_COR*df_RECO.PT_2_COR*(np.cosh(df_RECO.eta_1-df_RECO.eta_2)-np.cos(df_RECO.phi_1-df_RECO.phi_2)))
+                    ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step3_it.root", "READ");')
+                    ROOT.gROOT.ProcessLine(f'TH2D* h_kappa_{i}_{typ} = (TH2D*)tf->Get("M_{typ}");')
+                    ROOT.gROOT.ProcessLine(f'h_kappa_{i}_{typ}->SetDirectory(nullptr);')
+                    ROOT.gROOT.ProcessLine(f'TH2D* h_lambd_{i}_{typ} = (TH2D*)tf->Get("A_{typ}");')
+                    ROOT.gROOT.ProcessLine(f'h_lambd_{i}_{typ}->SetDirectory(nullptr);')
+                    ROOT.gROOT.ProcessLine(f'tf->Close();')
 
+                    # application of corrections
+                    df_reco = df_reco.Redefine(
+                        f"pt_1_roccor_it",
+                        f"double pt;\
+                        pt = 1./ (h_kappa_{i}_{typ}->GetBinContent( h_kappa_{i}_{typ}->GetXaxis()->FindBin(eta_1) , h_kappa_{i}_{typ}->GetYaxis()->FindBin(phi_1) ) / pt_1 - \
+                        h_lambd_{i}_{typ}->GetBinContent( h_lambd_{i}_{typ}->GetXaxis()->FindBin(eta_1) , h_lambd_{i}_{typ}->GetYaxis()->FindBin(phi_1) ));\
+                        return pt;"
+                    )
+                    df_reco = df_reco.Redefine(
+                        f"pt_2_roccor_it",
+                        f"1./ (h_kappa_{i}_{typ}->GetBinContent( h_kappa_{i}_{typ}->GetXaxis()->FindBin(eta_2) , h_kappa_{i}_{typ}->GetYaxis()->FindBin(phi_2) ) / pt_2 + \
+                        h_lambd_{i}_{typ}->GetBinContent( h_lambd_{i}_{typ}->GetXaxis()->FindBin(eta_2) , h_lambd_{i}_{typ}->GetYaxis()->FindBin(phi_2) ))"
+                    )
+                    df_reco = df_reco.Redefine(
+                        f"mass_Z_roccor_it",
+                        f"sqrt( 2 * pt_1_roccor_it * pt_2_roccor_it * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)) )"
+                    )
+
+                    df_reco_f = df_reco.Filter(f'{mass} > 86 && {mass} < 96')
+                    df_reco_f = df_reco.Filter(f'abs(eta_1) < 2.4 && abs(eta_2) < 2.4')
+
+                    # t3 = time()
+                    # print(f"Redefinition and Filtering took {round(t3-t2, 2)}s")
+
+                tf = ROOT.TFile(f'{hdir}step3_it_{typ}.root', 'recreate')
+                h_kappa.Write()
+                h_lambd.Write()
+                tf.Close()
             
-            
-                   
-            #define bins for plot
-            bins=80
-            rang=[86,96]        
-            fig, (ax0,ax1)=plt.subplots(2,1, gridspec_kw={"height_ratios":[3,1] })
-            plt.subplots_adjust(wspace=0, hspace=0)
-            ax0.set_xlim(left=rang[0],right=rang[1])
-            ax0.set_xticks([])
-            h_gen=ax0.hist(df_GEN["mass_Z_smeared"],bins=bins,range=rang,histtype="step",label="smeared gen",color='r',density=True)
-            h_reco=ax0.hist(df_RECO["MASS_Z_COR"],bins=bins,range=rang,histtype="step",label=f"iteration {n+1}",density=True)
-            h_reco0=ax0.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label=f"iteration {0}",density=True)
-            ax0.legend()
+            rang = np.linspace(86, 96, 60)
+            h_mass_it = df_reco.Histo1D(('h_mass_it', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor_it')
+            h_mass = df_reco.Histo1D(('h_mass', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor')
+            h_mass_gen = df_gen.Histo1D(('h_mass_gen', '', len(rang)-1, array('d', rang)), 'genmass_Z_smeared')
 
-            ax1.set_ylim(bottom=0.85,top=1.15)
-            ax1.set_xlim(left=rang[0],right=rang[1])
-            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco[0]/h_gen[0],'.',label="reco_15it/gen")
-            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco0[0]/h_gen[0],'.',label="reco_0it/gen")
-            ax1.set_xlabel("M_µµ (GeV)")
-            ax1.set_ylabel("ratio")
-            ax1.legend()
-            ax1.grid(True)
-            plt.savefig(f"{pdir}iterative/{subtyp}_z_mass_cut_{n+1}.png")
-            plt.clf()
+            tf = ROOT.TFile(f'{hdir}step3_closure_{typ}.root', 'recreate')
+            h_mass_it.Write()
+            h_mass.Write()
+            h_mass_gen.Write()
+            reco_means.Write()
+            gen_means.Write()
+            tf.Close()
 
-            bins=100
-            rang=[60,120]        
-            fig, (ax0,ax1)=plt.subplots(2,1, gridspec_kw={"height_ratios":[3,1] })
-            plt.subplots_adjust(wspace=0, hspace=0)
-            ax0.set_xlim(left=rang[0],right=rang[1])
-            ax0.set_xticks([])
-            h_gen=ax0.hist(df_GEN["mass_Z_smeared"],bins=bins,range=rang,histtype="step",label="smeared gen",color='r',density=True)
-            h_reco=ax0.hist(df_RECO["MASS_Z_COR"],bins=bins,range=rang,histtype="step",label=f"iteration {n+1}",density=True)
-            h_reco0=ax0.hist(df_RECO["mass_Z_mean_roccor"],bins=bins,range=rang,histtype="step",label=f"iteration {0}",density=True)
-            ax0.legend()
 
-            ax1.set_ylim(bottom=0.85,top=1.15)
-            ax1.set_xlim(left=rang[0],right=rang[1])
-            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco[0]/h_gen[0],'.',label="reco_15it/gen")
-            ax1.plot(np.linspace(rang[0],rang[1],bins),h_reco0[0]/h_gen[0],'.',label="reco_0it/gen")
-            ax1.set_xlabel("M_µµ (GeV)")
-            ax1.set_ylabel("ratio")
-            ax1.legend()
-            ax1.grid(True)
-            plt.savefig(f"{pdir}iterative/{subtyp}_z_mass_{n+1}.png")
-            plt.clf()
+def apply_iterative_correction(samples, hdir):
+    for typ in ['SIG', 'DATA']:
+        ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step3_it_{typ}.root", "READ");')
+        ROOT.gROOT.ProcessLine(f'TH2D* h_kappa_{typ} = (TH2D*)tf->Get("M_{typ}");')
+        ROOT.gROOT.ProcessLine(f'h_kappa_{typ}->SetDirectory(nullptr);')
+        ROOT.gROOT.ProcessLine(f'TH2D* h_lambd_{typ} = (TH2D*)tf->Get("A_{typ}");')
+        ROOT.gROOT.ProcessLine(f'h_lambd_{typ}->SetDirectory(nullptr);')
+        ROOT.gROOT.ProcessLine(f'tf->Close();')
+
+
+    for typ in samples:
+        if typ == 'GEN': continue
+        for subtyp in samples[typ]:
+            if typ == 'DATA':
+                dtsg = 'DATA'
+            else:
+                dtsg = 'SIG'
+
+            df = ROOT.RDataFrame("Events", samples[typ][subtyp])
+
+            df = df.Define(
+                f"pt_1_roccor_it",
+                f"double pt;\
+                pt = 1./ (h_kappa_{dtsg}->GetBinContent( h_kappa_{dtsg}->GetXaxis()->FindBin(eta_1) , h_kappa_{dtsg}->GetYaxis()->FindBin(phi_1) ) / pt_1 - \
+                h_lambd_{dtsg}->GetBinContent( h_lambd_{dtsg}->GetXaxis()->FindBin(eta_1) , h_lambd_{dtsg}->GetYaxis()->FindBin(phi_1) ));\
+                return pt;"
+            )
+            df = df.Define(
+                f"pt_2_roccor_it",
+                f"1./ (h_kappa_{dtsg}->GetBinContent( h_kappa_{dtsg}->GetXaxis()->FindBin(eta_2) , h_kappa_{dtsg}->GetYaxis()->FindBin(phi_2) ) / pt_2 + \
+                h_lambd_{dtsg}->GetBinContent( h_lambd_{dtsg}->GetXaxis()->FindBin(eta_2) , h_lambd_{dtsg}->GetYaxis()->FindBin(phi_2) ))"
+            )
+            df = df.Define(
+                f"mass_Z_roccor_it",
+                f"sqrt( 2 * pt_1_roccor_it * pt_2_roccor_it * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)) )"
+            )            
+
+            #save results
+            print(f"saving corrected dfs to {samples[typ][subtyp]}")
+            df.Snapshot("Events", samples[typ][subtyp].replace('.root', '_it.root'))
+            print("done")
+
+
+def plot_closure(hdir, pdir, samples, eta_bins, phi_bins, iterationsteps):
+    pdir = pdir+'iterative/'
+    for typ in samples:
+        if typ == "SIG" or typ=="DATA":
+            tf = ROOT.TFile(f'{hdir}step3_closure_{typ}.root', 'read')
+            h_mass_it = tf.Get('h_mass_it')
+            h_mass_it.Sumw2()
+            h_mass_it.Scale(1./h_mass_it.Integral())
+
+            h_mass = tf.Get('h_mass')
+            h_mass.Sumw2()
+            h_mass.Scale(1./h_mass.Integral())
+
+            h_mass_gen = tf.Get('h_mass_gen')
+            h_mass_gen.Sumw2()
+            h_mass_gen.Scale(1./h_mass_gen.Integral())
+
+            reco_means = tf.Get(f'reco_means_{typ}')
+            gen_means = tf.Get(f'gen_means')
+
+            plot_ratio(
+                hists={
+                    'gen': h_mass,
+                    'mc': h_mass_gen,
+                    'dt': h_mass_it
+                }, 
+                title='',
+                outfile=f'{pdir}Z_mass_comparison_{typ}',
+                text=['','',''],
+                #xrange=[60, 120],
+                labels={
+                    'gen': 'reco mass',
+                    'mc': 'Generated mass',
+                    'dt': 'corrected reco mass'
+                },
+                ratio_range=[0.9, 1.1]
+            )
                            
+            os.makedirs(f"{pdir}iterative/binwise", exist_ok=True)
+            os.makedirs(f"{pdir}iterative/binwise/{typ}", exist_ok=True)
 
             #make binwise plot
             for i in range(len(eta_bins)-1):
                 for j in range(len(phi_bins)-1):
                     reco=[]
                     gen=[]
-                    for n in range(len(reco_means)):
-                        reco.append(reco_means[n][i][j])
-                        gen.append(gen_means[n][i][j])
+                    iterations = []
+                    for n in range(iterationsteps):
+                        reco.append(reco_means.GetBinContent(n+1, i+1, j+1))
+                        gen.append(gen_means.GetBinContent(i+1, j+1))
+                        iterations.append(n)
 
-                    plt.clf()
                     plt.plot(iterations, reco,"x",c="blue",label="RECO")
                     plt.plot(iterations, gen,"--",c="darkblue",label="GEN")
                     plt.xlabel("iteration")
                     plt.ylabel("mean(M_µµ)")
                     plt.title(f"eta[{eta_bins[i]}, {eta_bins[i+1]}], phi[{round(phi_bins[i],1)}, {round(phi_bins[i+1],1)}]")
                     plt.legend()
-                    plt.savefig(f"{pdir}iterative/binwise/{subtyp}/{subtyp}iteration_mean_eta{i}_phi{j}.png")
+                    plt.savefig(f"{pdir}iterative/binwise/{typ}/{typ}iteration_mean_eta{i}_phi{j}.png")
                     plt.clf()
-            
-            plt.plot(iterations, VP)
-            plt.plot(iterations,VM)
-            plt.savefig(f"{pdir}iterative/{subtyp}iteration_min_var.png")
-            plt.clf()
-
-            #save results
-            print(f"saving corrected dfs to {samples[typ][subtyp]}")
-            data={key: df_RECO[key].values for key in df_RECO.columns}
-            rdf = ROOT.RDF.MakeNumpyDataFrame(data)
-            rdf.Snapshot("Events", samples[typ][subtyp])
-            print("done")  
-
-def iterationsfunktion(Mp,Mm,Vp,Vm,Kp,Km):
-
-    #calc correction
-    
-    mu = (Vp/Kp-Vm/Km)/(Mp/Kp-Mm/Km)
-    kappa=1+mu
-    lambd = ((Vp-Mp*mu)/Kp+(Vm-Mm*mu)/Km)/2
-    return kappa, lambd
-
-
-def get_k_l(df_RECO, eta_bins, phi_bins):
-    print("getting initial kappa and lambda")
-    kappa_table=np.zeros([len(eta_bins)-1,len(phi_bins)-1])
-    lambda_table=np.zeros([len(eta_bins)-1,len(phi_bins)-1])
-
-    for i in range(len(eta_bins)-1):
-        #filter for eta bin
-        eta_1_filter=(eta_bins[i]<df_RECO["eta_1"]) & (df_RECO["eta_1"]<=eta_bins[i+1])
-        eta_2_filter=(eta_bins[i]<df_RECO["eta_2"]) & (df_RECO["eta_2"]<=eta_bins[i+1])
-        df_RECO_e1=df_RECO[eta_1_filter]
-        df_RECO_e2=df_RECO[eta_2_filter]
-
-        for j in range(len(phi_bins)-1):
-            #filter for phi bin
-            phi_1_filter=(phi_bins[j]<df_RECO_e1["phi_1"]) & (df_RECO_e1["phi_1"]<=phi_bins[j+1])
-            phi_2_filter=(phi_bins[j]<df_RECO_e2["phi_2"]) & (df_RECO_e2["phi_2"]<=phi_bins[j+1])
-            df_RECO_ep1=df_RECO_e1[phi_1_filter]
-            df_RECO_ep2=df_RECO_e2[phi_2_filter]
-
-            pt1=np.array(df_RECO_ep1.pt_1)[0]
-            pt1_cor=np.array(df_RECO_ep1.pt_1_mean_roccor)[0]
-            pt2=np.array(df_RECO_ep2.pt_2)[0]
-            pt2_cor=np.array(df_RECO_ep2.pt_2_mean_roccor)[0]
-            
-        
-            kappa_table[i][j]+=pt1*pt2*(pt1_cor+pt2_cor)/(pt1_cor*pt2_cor*(pt1+pt2))
-            lambda_table[i][j]+=1/pt2_cor-kappa_table[i][j]/pt2
-
-            #print(kappa_table[i][j],lambda_table[i][j], pt1, pt1_cor, 1/(kappa_table[i][j]/pt1-lambda_table[i][j]))
-
-    return kappa_table, lambda_table

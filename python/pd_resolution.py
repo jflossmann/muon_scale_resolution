@@ -95,6 +95,10 @@ def resolution(abseta_bins, nT_bins, pt_bins, pull_bins, datadir, hdir, pdir, pl
         pull_hist       = np.histogram(pull, bins=pull_bins, density=True)[0]
         pull_bincenters = pull_bins[:-1] + (pull_bins[1]-pull_bins[0])/2
 
+        plt.plot(pull_bincenters, pull_hist)
+        plt.savefig('pull_test.png')
+        plt.clf()
+
         popt,pcov = curve_fit(CrystalBall, pull_bincenters, pull_hist, p0=np.array([0, 0.7, 1, 4]))
         CB_mu, CB_sig, CB_alpha, CB_n = popt
         
@@ -113,6 +117,9 @@ def resolution(abseta_bins, nT_bins, pt_bins, pull_bins, datadir, hdir, pdir, pl
         return poly_a, poly_b, poly_c, CB_mu, CB_sig, CB_alpha, CB_n
     
     print("perform fits")
+
+    for bin in tqdm(abseta_nT_bins):
+        res = Fits_bin(bin)
     
     FitPar=np.array(Parallel(n_jobs=n_cores)(delayed(Fits_bin)(bin) for bin in tqdm(abseta_nT_bins))).T
         

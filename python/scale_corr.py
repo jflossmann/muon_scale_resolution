@@ -37,7 +37,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
 
             for np in range(2):
                 #define new column for 1/pt
-                rdf = rdf.Define(f"oneOverPt_{np+1}", f"1./{sgen}pt_{np+1}{roccor}")
+                rdf = rdf.Define(f"oneOverPt_{np+1}", f"1./{sgen}pt_{np+1}{roccor}") # TODO check sgen vs gen
                 #create 3D histogram
                 h_3d = rdf.Histo3D(
                     (
@@ -80,7 +80,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
             hists["tosave"] += [h.Project3DProfile("yx")]            
         
     #save
-    tf = ROOT.TFile(f"{hdir}oneOverPt{corr}.root","RECREATE")
+    tf = ROOT.TFile(f"{hdir}step1_oneOverPt{corr}.root","RECREATE")
     for h in hists["tosave"]:
         h.Write()
     tf.Close()
@@ -99,7 +99,7 @@ def get_scale_corrections(samples, eta_bins, phi_bins, charge_bins, hdir)->None:
     negpos = ["neg", "pos"]
     
     # get 3D histograms from TFile
-    tf = ROOT.TFile(f"{hdir}oneOverPt.root", "READ")
+    tf = ROOT.TFile(f"{hdir}step1_oneOverPt.root", "READ")
     oneOverPt_hists = {}
 
     #iterate over data, mc and gen
@@ -191,7 +191,7 @@ def get_scale_corrections(samples, eta_bins, phi_bins, charge_bins, hdir)->None:
                 )
 
     #safe histograms as Tfile
-    tf = ROOT.TFile(f"{hdir}C.root", "RECREATE")
+    tf = ROOT.TFile(f"{hdir}step1_C.root", "RECREATE")
     for typ in samples[:-1]:
         C[typ].Write()
         Dm[typ].Write()
@@ -210,16 +210,19 @@ def apply_scale_corrections(ntuples, hdir):
     t0 = time()
 
     #open Tfile with scale corrections
-    ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}C.root", "READ");')
+    ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step1_C.root", "READ");')
     #read histograms for curent mode
     ROOT.gROOT.ProcessLine(f'TH2D* M_DATA = (TH2D*)tf->Get("M_DATA");')
     ROOT.gROOT.ProcessLine(f'TH2D* M_SIG = (TH2D*)tf->Get("M_SIG");')
     ROOT.gROOT.ProcessLine(f'TH2D* M_BKG = (TH2D*)tf->Get("M_SIG");')
+    ROOT.gROOT.ProcessLine(f'TH2D* M_GEN = (TH2D*)tf->Get("M_SIG");')
     ROOT.gROOT.ProcessLine(f'TH2D* A_DATA = (TH2D*)tf->Get("A_DATA");')
     ROOT.gROOT.ProcessLine(f'TH2D* A_SIG = (TH2D*)tf->Get("A_SIG");')  
     ROOT.gROOT.ProcessLine(f'TH2D* A_BKG = (TH2D*)tf->Get("A_SIG");')
+    ROOT.gROOT.ProcessLine(f'TH2D* A_GEN = (TH2D*)tf->Get("A_SIG");')
     
-    for typ in list(ntuples.keys())[:-1]:
+    # for typ in list(ntuples.keys())[:-1]:
+    for typ in list(ntuples.keys())[-1:]:
         for sample in ntuples[typ]:
             #make RDataFrame object for current dataset
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
