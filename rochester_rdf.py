@@ -60,20 +60,16 @@ def parse_args():
     return args
 
 
-
 if __name__=='__main__':
-    diffpt_bins = np.linspace(-0.01, 0.01, 200)
-    pt_bins = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
-    oneOverPt_bins = np.linspace(0.019,0.027, 50)#[i/2000000. for i in range(200000)]
-    eta_bins = [-2.4, -2.1, -1.85, -0.4, 0, 0.4, 1.85, 2.1, 2.4]
-    phi_bins = np.linspace(-3.2, 3.2, 17) #[-3.2, -2.4, -1.6, -.8, 0, .8, 1.6, 2.4, 3.2]
-    charge_bins = [-2,0,2]
-    mass_bins = np.linspace(75, 105, 61)
-    
+
+    # definition of paths
     datadir = "/ceph/jdriesch/rochester/ntuples/"
-    nanoAODs = ntuple.yaml_loader('data/nanoAODs.yaml')
-    datasets = ntuple.yaml_loader('data/datasets.yaml')
-    samples_to_plot = ["DATA", "SIG", "GEN"]
+    sf_path = 'data/scaleFactors/Run2/UL/2018/2018_Z/Efficiencies_muon_generalTracks_Z_Run2018_UL_'
+    SFs = {
+        'ID': ntuple.load_hist(sf_path+'ID.root', 'NUM_MediumID_DEN_TrackerMuons_abseta_pt'),
+        'ISO': ntuple.load_hist(sf_path+'ISO.root', 'NUM_TightRelIso_DEN_MediumID_abseta_pt')
+    }
+    
     ntuples = {
         'DATA': {'DATA': f"{datadir}DATA_*.root"},
         'SIG': {'SIG': f"{datadir}DY_*.root"},
@@ -85,6 +81,7 @@ if __name__=='__main__':
         },
         'GEN': {'GEN': f"{datadir}GEN_*.root"}
     }
+
     ntuples_zPt = {
         'DATA': {'DATA': f"{datadir}DATA_zPt.root"},
         'SIG': {'SIG': f"{datadir}DY_zPt.root"},
@@ -96,46 +93,35 @@ if __name__=='__main__':
         },
         'GEN': {'GEN': f"{datadir}GEN_zPt.root"}
     }
-    ntuples_corr = {
-        'DATA': {'DATA': f"{datadir}DATA_zPt_corr.root"},
-        'SIG': {'SIG': f"{datadir}DY_zPt_corr.root"},
-        'BKG': {
-            'WW': f"{datadir}WW_zPt_corr.root",
-            'WZ': f"{datadir}WZ_zPt_corr.root",
-            'ZZ': f"{datadir}ZZ_zPt_corr.root",
-            'TT': f"{datadir}TT_zPt_corr.root",
-        },
-        'GEN': {'GEN': f"{datadir}GEN_zPt_corr.root"}
-    }
 
-    sf_path = 'data/scaleFactors/Run2/UL/2018/2018_Z/Efficiencies_muon_generalTracks_Z_Run2018_UL_'
-    SFs = {
-        'ID': ntuple.load_hist(sf_path+'ID.root', 'NUM_MediumID_DEN_TrackerMuons_abseta_pt'),
-        'ISO': ntuple.load_hist(sf_path+'ISO.root', 'NUM_TightRelIso_DEN_MediumID_abseta_pt')
-    }
+
     hdir = 'hists/'
     pdir = 'plots/'
 
     args = parse_args()
     ROOT.gROOT.SetBatch()
 
+    # bin defintion
+    pt_bins = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
+    oneOverPt_bins = np.linspace(0.019,0.027, 50)#[i/2000000. for i in range(200000)]
+    eta_bins = [-2.4, -2.1, -1.85, -0.4, 0, 0.4, 1.85, 2.1, 2.4]
+    phi_bins = np.linspace(-3.2, 3.2, 17) #[-3.2, -2.4, -1.6, -.8, 0, .8, 1.6, 2.4, 3.2]
+    charge_bins = [-2,0,2]
+    mass_bins = np.linspace(75, 105, 61)
+
     if args.ntuples:
+        nanoAODs = ntuple.yaml_loader('data/nanoAODs.yaml')
+        datasets = ntuple.yaml_loader('data/datasets.yaml')
         # ntuple.make_ntuples(nanoAODs, datasets, datadir)
         os.makedirs(hdir, exist_ok=True)
         ntuple.hist_zpt(ntuples, pt_bins, hdir)
-        ntuple.weight_zpt(ntuples, hdir, diffpt_bins, eta_bins, phi_bins) # weight also backgrounds and GEN?
+        ntuple.weight_zpt(ntuples, hdir, eta_bins, phi_bins) # weight also backgrounds and GEN?
 
     if args.scale:
         os.makedirs(hdir, exist_ok=True)
         step1.hist_oneOverpT(ntuples_zPt, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir)
-        step1.get_scale_corrections(samples_to_plot, eta_bins, phi_bins, charge_bins, hdir)
-        # step1.apply_scale_corrections(ntuples_zPt, hdir)
-        # step1.hist_oneOverpT(ntuples_corr, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='_roccor')
-        
-    # if args.zmass:
-    #     zmass.hist_zmass(ntuples_corr, eta_bins, phi_bins, mass_bins, hdir)
-    #     zmass.fit_zmass(eta_bins, phi_bins, hdir)
-    #     zmass.plot_zmass(eta_bins, phi_bins, hdir)
+        samples_to_plot = ["DATA", "SIG", "GEN"]
+        step1.get_scale_corrections(samples_to_plot, eta_bins, phi_bins, charge_bins, hdir)        
 
     if args.resolution:
         pull_bins=np.linspace(-5,5,100)
