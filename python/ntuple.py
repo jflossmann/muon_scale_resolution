@@ -187,21 +187,16 @@ ROOT.gInterpreter.Declare("""
 
 
 # function to add z pt weight. TODO: also for GEN or use reco instead?
-def weight_zpt(ntuples, hdir, eta_bins, phi_bins):
+def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}z_reweighting.root", "READ");')
     ROOT.gROOT.ProcessLine('TH1D* h_dt = (TH1D*)tf->Get("h_Zboson_pt_DATA");')
     ROOT.gROOT.ProcessLine('TH1D* h_mc = (TH1D*)tf->Get("h_Zboson_pt_SIG");')
     ROOT.gROOT.ProcessLine('TH1D* h_ratio = (TH1D*)h_dt->Clone();')
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
-  
-    path_sf = 'data/scaleFactors/Run2/UL/2018/2018_Z/Efficiencies_muon_generalTracks_Z_Run2018_UL_{}.root'
-    path_id = path_sf.format('ID')
-    path_iso = path_sf.format('ISO')
 
-    ROOT.gROOT.ProcessLine(f'TFile* tf_id = TFile::Open("{path_id}", "read");')
-    ROOT.gROOT.ProcessLine('TH2F* h_id = (TH2F*)tf_id->Get("NUM_MediumID_DEN_TrackerMuons_abseta_pt");')
-    ROOT.gROOT.ProcessLine(f'TFile* tf_iso = TFile::Open("{path_iso}", "read");')
-    ROOT.gROOT.ProcessLine('TH2F* h_iso = (TH2F*)tf_iso->Get("NUM_TightRelIso_DEN_MediumID_abseta_pt");')
+    for sf in SFs:        
+        ROOT.gROOT.ProcessLine(f'TFile* tf_{sf} = TFile::Open("{SFs[sf][0]}", "read");')
+        ROOT.gROOT.ProcessLine(f'TH2F* h_{sf} = (TH2F*)tf_id->Get("{SFs[sf][1]}");')
 
     for typ in ntuples:
         for sample in ntuples[typ]:
@@ -213,17 +208,28 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins):
             rdf = rdf.Define('xsec', str(sampleyaml['xsec']))
             if typ == "DATA":
                 rdf = rdf.Define("zPtWeight", "1")
-                rdf = rdf.Define("sf_id_1", "1").Define("sf_id_2", "1")
-                rdf = rdf.Define("sf_iso_1", "1").Define("sf_iso_2", "1")
+                for sf in SFs:
+                    rdf = rdf.Define(f"sf_{sf}_1", "1")
+                    rdf = rdf.Define(f"sf_{sf}_2", "1")
             else:
                 rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
-                rdf = rdf.Define("sf_id_1", 'h_id->GetBinContent(h_id->GetXaxis()->FindBin(fabs(eta_1)), h_id->GetYaxis()->FindBin(pt_1))')
-                rdf = rdf.Define("sf_id_2", 'h_id->GetBinContent(h_id->GetXaxis()->FindBin(fabs(eta_2)), h_id->GetYaxis()->FindBin(pt_2))')
-                rdf = rdf.Define("sf_iso_1", 'h_iso->GetBinContent(h_id->GetXaxis()->FindBin(fabs(eta_1)), h_iso->GetYaxis()->FindBin(pt_1))')
-                rdf = rdf.Define("sf_iso_2", 'h_iso->GetBinContent(h_id->GetXaxis()->FindBin(fabs(eta_2)), h_iso->GetYaxis()->FindBin(pt_2))')
-
-            rdf = rdf.Define("sf_id", "sf_id_1 * sf_id_2")
-            rdf = rdf.Define("sf_iso", "sf_iso_1 * sf_iso_2")
+                for sf in SFs:
+                    rdf = rdf.Define(
+                        f"sf_{sf}_1",
+                        f'h_{sf}->GetBinContent(\
+                            h_{sf}->GetXaxis()->FindBin(fabs(eta_1)),\
+                            h_{sf}->GetYaxis()->FindBin(pt_1)\
+                        )'
+                    )
+                    rdf = rdf.Define(
+                        f"sf_{sf}_2",
+                        f'h_{sf}->GetBinContent(\
+                            h_{sf}->GetXaxis()->FindBin(fabs(eta_2)),\
+                            h_{sf}->GetYaxis()->FindBin(pt_2)\
+                        )'
+                    )
+            for sf in SFs:
+                rdf = rdf.Define(f"sf_{sf}", f"sf_{sf}_1 * sf_{sf}_2")
 
             rdf.Snapshot("Events", ntuples[typ][sample].replace("*.root", "zPt.root"))
 
@@ -233,6 +239,10 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins):
 
 # function which creates ntuple files from nanoaod
 def make_ntuples(nanoAODs, datasets, datadir):
+
+    nanoAODs = ntuple.yaml_loader(nanoAODs)
+    datasets = ntuple.yaml_loader(datasets)
+
     for sample in nanoAODs:
 
         sum_genweights = 0
@@ -397,10 +407,3 @@ def yaml_loader(fname):
         dsets = yaml.load(f, Loader=yaml.Loader)
     #print(dsets)
     return dsets
-
-
-def load_hist(path, sf):
-    tf = ROOT.TFile(path, "read")
-    h_sf = tf.Get(sf)
-    h_sf.SetDirectory(ROOT.nullptr)
-    return h_sf
