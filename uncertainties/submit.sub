@@ -1,0 +1,41 @@
+## Executable that will be run in job (has to be executable)
+executable = ./job.sh
+
+arguments = $(Process)
+
+## Output/Error/Log files
+Output = condor_jobs/job_$(Cluster)_$(Process).out
+Error  = condor_jobs/job_$(Cluster)_$(Process).err
+Log    = condor_jobs/job_$(Cluster)_$(Process).log
+
+
+## Requested parameters
+#  1 hour walltime
++RequestWalltime = 3600*2
+
+#  CPU
+RequestCPUs = 1
+
+# RAM (in MB)
+RequestMemory = 5000
+
+#  scratch space (in kB)
+request_disk = 20000000
+
+# ETP ressources needed
+Requirements = TARGET.ProvidesEKPResources =?= True
+
+## Appropriate accounting group
+#  belle, ams,
+#  cms.top, cms.higgs, cms.production, cms.jet
+accounting_group = cms.higgs
+
+## Choose docker image to run the job on
+Universe = docker
+docker_image = mschnepf/slc7-condocker
+
+## Copy local variables to job
+getenv = True
+
+numJobs = 200
+queue $(numJobs)

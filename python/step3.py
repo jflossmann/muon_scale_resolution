@@ -17,7 +17,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
 
     print(samples['GEN']['GEN'])
 
-    df_gen = ROOT.RDataFrame('Events', samples['GEN']['GEN'])
+    df_gen = ROOT.RDataFrame("Events", samples['GEN']['GEN'])
+    df_gen = df_gen.Define("bs_weight", "(int)(poisson())")
     df_gen = step1(df_gen, hdir, 'GEN')
     df_gen = step2(df_gen, hdir, 'GEN')
     df_gen = df_gen.Filter('genmass_Z_smeared > 86 && genmass_Z_smeared < 96')
@@ -31,7 +32,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
         ),
         'eta_1',
         'phi_1',
-        'genmass_Z_smeared'
+        'genmass_Z_smeared',
+        "bs_weight"
     )
     h_gen_p = df_gen.Histo3D(
         (
@@ -42,7 +44,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
         ),
         'eta_2',
         'phi_2',
-        'genmass_Z_smeared'
+        'genmass_Z_smeared',
+        "bs_weight"
     )
 
     gen_means_n = h_gen_n.Project3DProfile(option='yx')
@@ -74,7 +77,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
             for subtyp in samples[typ]:
                 print(f"now processing {subtyp}")
 
-                tf = ROOT.TFile(f'{hdir}C.root', 'read')
+                tf = ROOT.TFile(f'{hdir}step1_C.root', 'read')
                 h_kappa = tf.Get(f'M_{typ}')
                 h_kappa.SetDirectory(ROOT.nullptr)
                 h_lambd = tf.Get(f'A_{typ}')
@@ -82,7 +85,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                 tf.Close()
 
                 #read data into dataframe
-                df_reco = ROOT.RDataFrame('Events', samples[typ][subtyp])
+                df_reco = ROOT.RDataFrame("Events", samples[typ][subtyp])
+                df_reco = df_reco.Define("bs_weight", "(int)(poisson())")
                 df_reco = step1(df_reco, hdir, typ)
                 df_reco = df_reco.Define(f'mass_Z_roccor_it', 'mass_Z_roccor')
                 df_reco = df_reco.Define('pt_1_roccor_it', 'pt_1_roccor')
@@ -107,7 +111,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         ),
                         'eta_1',
                         'phi_1',
-                        mass
+                        mass,
+                        "bs_weight"
                     )
                     h_reco_p = df_reco_f.Histo3D(
                         (
@@ -118,7 +123,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         ),
                         'eta_2',
                         'phi_2',
-                        mass
+                        mass,
+                        "bs_weight"
                     )
 
                     df_reco_f = df_reco_f.Redefine(f"masspt_1", f"{mass} * pt_1_roccor_it")
@@ -133,7 +139,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         ),
                         'eta_1',
                         'phi_1',
-                        f'masspt_1'
+                        f'masspt_1',
+                        "bs_weight"
                     )
                     h_reco_mpt_p = df_reco_f.Histo3D(
                         (
@@ -144,7 +151,8 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         ),
                         'eta_2',
                         'phi_2',
-                        f'masspt_2'
+                        f'masspt_2',
+                        "bs_weight"
                     )
 
                     reco_means_n = h_reco_n.Project3DProfile(option='yx')
@@ -223,9 +231,9 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                 tf.Close()
             
             rang = np.linspace(86, 96, 60)
-            h_mass_it = df_reco.Histo1D(('h_mass_it', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor_it')
-            h_mass = df_reco.Histo1D(('h_mass', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor')
-            h_mass_gen = df_gen.Histo1D(('h_mass_gen', '', len(rang)-1, array('d', rang)), 'genmass_Z_smeared')
+            h_mass_it = df_reco.Histo1D(('h_mass_it', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor_it', "bs_weight")
+            h_mass = df_reco.Histo1D(('h_mass', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor', "bs_weight")
+            h_mass_gen = df_gen.Histo1D(('h_mass_gen', '', len(rang)-1, array('d', rang)), 'genmass_Z_smeared', "bs_weight")
 
             tf = ROOT.TFile(f'{hdir}step3_closure_{typ}.root', 'recreate')
             h_mass_it.Write()
@@ -238,45 +246,76 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
 
 def plot_closure(hdir, pdir, samples, eta_bins, phi_bins, iterationsteps):
     pdir = pdir+'iterative/'
+
+    tf_sig = ROOT.TFile(f'{hdir}step3_closure_SIG.root', 'read')
+    tf_data = ROOT.TFile(f'{hdir}step3_closure_DATA.root', 'read')
+
+    h_mass_data_it = tf_data.Get('h_mass_it').Clone('h_mass_data_it')
+    h_mass_data_it.Sumw2()
+    h_mass_data_it.Scale(1./h_mass_data_it.Integral())
+
+    h_mass_sig_it = tf_sig.Get('h_mass_it').Clone('h_mass_sig_it')
+    h_mass_sig_it.Sumw2()
+    h_mass_sig_it.Scale(1./h_mass_sig_it.Integral())
+
+    h_mass_data = tf_data.Get('h_mass').Clone('h_mass_data')
+    h_mass_data.Sumw2()
+    h_mass_data.Scale(1./h_mass_data.Integral())
+
+    h_mass_sig = tf_sig.Get('h_mass').Clone('h_mass_sig')
+    h_mass_sig.Sumw2()
+    h_mass_sig.Scale(1./h_mass_sig.Integral())
+
+    h_mass_gen = tf_data.Get('h_mass_gen')
+    h_mass_gen.Sumw2()
+    h_mass_gen.Scale(1./h_mass_gen.Integral())
+
+    data_means = tf_data.Get(f'reco_means_DATA')
+    sig_means = tf_sig.Get(f'reco_means_SIG')
+    gen_means = tf_data.Get(f'gen_means')
+
+    # before correction
+    plot_ratio(
+        hists={
+            'gen': h_mass_gen,
+            'mc': h_mass_sig,
+            'dt': h_mass_data
+        }, 
+        title='',
+        outfile=f'{pdir}Z_mass_comparison_before',
+        text=['','',''],
+        #xrange=[60, 120],
+        labels={
+            'gen': 'gen mc',
+            'mc': 'reco mc',
+            'dt': 'data'
+        },
+        ratio_range=[0.9, 1.1]
+    )
+
+    # after correction
+    plot_ratio(
+        hists={
+            'gen': h_mass_gen,
+            'mc': h_mass_sig_it,
+            'dt': h_mass_data_it
+        }, 
+        title='',
+        outfile=f'{pdir}Z_mass_comparison_after',
+        text=['','',''],
+        #xrange=[60, 120],
+        labels={
+            'gen': 'gen mc',
+            'mc': 'it. corr. reco mc',
+            'dt': 'it. corr. data'
+        },
+        ratio_range=[0.9, 1.1]
+    )
+                    
+
     for typ in samples:
-        if typ == "SIG" or typ=="DATA":
-            tf = ROOT.TFile(f'{hdir}step3_closure_{typ}.root', 'read')
-            h_mass_it = tf.Get('h_mass_it')
-            h_mass_it.Sumw2()
-            h_mass_it.Scale(1./h_mass_it.Integral())
-
-            h_mass = tf.Get('h_mass')
-            h_mass.Sumw2()
-            h_mass.Scale(1./h_mass.Integral())
-
-            h_mass_gen = tf.Get('h_mass_gen')
-            h_mass_gen.Sumw2()
-            h_mass_gen.Scale(1./h_mass_gen.Integral())
-
-            reco_means = tf.Get(f'reco_means_{typ}')
-            gen_means = tf.Get(f'gen_means')
-
-            plot_ratio(
-                hists={
-                    'gen': h_mass,
-                    'mc': h_mass_gen,
-                    'dt': h_mass_it
-                }, 
-                title='',
-                outfile=f'{pdir}Z_mass_comparison_{typ}',
-                text=['','',''],
-                #xrange=[60, 120],
-                labels={
-                    'gen': 'reco mass',
-                    'mc': 'Generated mass',
-                    'dt': 'corrected reco mass'
-                },
-                ratio_range=[0.9, 1.1]
-            )
-                           
-            os.makedirs(f"{pdir}iterative/binwise", exist_ok=True)
+        if typ =='DATA' or typ=='SIG':
             os.makedirs(f"{pdir}iterative/binwise/{typ}", exist_ok=True)
-
             #make binwise plot
             for i in range(len(eta_bins)-1):
                 for j in range(len(phi_bins)-1):
@@ -284,7 +323,11 @@ def plot_closure(hdir, pdir, samples, eta_bins, phi_bins, iterationsteps):
                     gen=[]
                     iterations = []
                     for n in range(iterationsteps):
-                        reco.append(reco_means.GetBinContent(n+1, i+1, j+1))
+                        if typ == 'DATA':
+                            reco.append(data_means.GetBinContent(n+1, i+1, j+1))
+                        else:
+                            reco.append(sig_means.GetBinContent(n+1, i+1, j+1))
+
                         gen.append(gen_means.GetBinContent(i+1, j+1))
                         iterations.append(n)
 

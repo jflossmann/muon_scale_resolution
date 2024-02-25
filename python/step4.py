@@ -4,7 +4,7 @@ import json
 import os
 import ROOT
 from array import array
-from python.plot import roofit_mass, plot_ratio
+from python.plot import roofit_mass, plot_ratio, plot_ratio2
 from python.apply_corrections import step1, step2, step3, step4
 
 
@@ -16,6 +16,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
     # n=8
     #get gen data
     df_gen = ROOT.RDataFrame("Events", samples["GEN"]["GEN"])
+    df_gen = df_gen.Define("bs_weight", "(int)(poisson())")
     df_gen = step1(df_gen, hdir, 'GEN')
     df_gen = step2(df_gen, hdir, 'GEN')
     df_gen = df_gen.Define("abseta_1", "abs(eta_1)").Define("abseta_2", "abs(eta_2)")
@@ -31,7 +32,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
             len(m_bins)-1, array('d', m_bins)
         ),
         "abseta_1",
-        "genmass_Z"
+        "genmass_Z", 
+        "bs_weight"
     )
     h_gen_mass_2 = df_gen.Histo2D(
         (
@@ -40,7 +42,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
             len(m_bins)-1, array('d', m_bins)
         ),
         "abseta_2",
-        "genmass_Z"
+        "genmass_Z", 
+        "bs_weight"
     )
     h_gen_mass_smeared_1 = df_gen.Histo2D(
         (
@@ -49,7 +52,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
             len(m_bins)-1, array('d', m_bins)
         ),
         "abseta_1",
-        "genmass_Z_smeared"
+        "genmass_Z_smeared", 
+        "bs_weight"
     )
     h_gen_mass_smeared_2 = df_gen.Histo2D(
         (
@@ -58,7 +62,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
             len(m_bins)-1, array('d', m_bins)
         ),
         "abseta_2",
-        "genmass_Z_smeared"
+        "genmass_Z_smeared", 
+        "bs_weight"
     )
 
     for typ in samples:
@@ -68,6 +73,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                 
                 #read data into dataframe
                 df_reco = ROOT.RDataFrame("Events", samples[typ][subtyp])
+                df_reco = df_reco.Define("bs_weight", "(int)(poisson())")
                 df_reco = step1(df_reco, hdir, typ)
                 df_reco = step3(df_reco, hdir, typ)
                 df_reco = df_reco.Define("abseta_1", "abs(eta_1)")
@@ -81,7 +87,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                         len(m_bins)-1, array('d', m_bins)
                     ),
                     "abseta_1",
-                    "mass_Z_roccor_it"
+                    "mass_Z_roccor_it", 
+                    "bs_weight"
                 )
                 h_mass_reco_2 = df_reco.Histo2D(
                     (
@@ -90,7 +97,8 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                         len(m_bins)-1, array('d', m_bins)
                     ),
                     "abseta_2",
-                    "mass_Z_roccor_it"
+                    "mass_Z_roccor_it", 
+                    "bs_weight"
                 )
 
                 tf = ROOT.TFile(f'{hdir}step4_{typ}.root', 'recreate')
@@ -171,6 +179,7 @@ def plot_closure(samples, hdir, pdir):
         first = 1
         for subtyp in samples[typ]:
             df = ROOT.RDataFrame("Events", samples[typ][subtyp])
+            df = df.Define("bs_weight", "(int)(poisson())")
 
             df = step1(df, hdir, typ)
             df = step2(df, hdir, typ)
@@ -178,11 +187,11 @@ def plot_closure(samples, hdir, pdir):
             df = step4(df, hdir, typ)
             
             if typ == 'GEN':
-                h_names = ['genmass_Z_smeared_SIG', 'genmass_Z_smeared_DATA', 'genmass_Z_smeared']
+                h_names = ['genmass_Z_smeared_SIG', 'genmass_Z_smeared_DATA', 'genmass_Z_smeared', "mass_Z_smeared"]
             else: 
                 h_names = ['mass_Z_roccor_it']
 
-            df = df.Define("weight", "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso")
+            df = df.Define("weight", "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*bs_weight")
 
             for h in h_names:
                 hists.append(
@@ -213,16 +222,16 @@ def plot_closure(samples, hdir, pdir):
     h_mc.Sumw2()
     h_mc.Scale(1./h_mc.Integral())
 
-    h_dt = tf.Get(f'genmass_Z_smeared_SIG_GEN')
-    h_dt.Sumw2()
-    h_dt.Scale(1./h_dt.Integral())
+    h_gen_smeared = tf.Get(f'genmass_Z_smeared_SIG_GEN')
+    h_gen_smeared.Sumw2()
+    h_gen_smeared.Scale(1./h_gen_smeared.Integral())
 
-
-    plot_ratio(
+    # first show impact of gensmearing to MC
+    plot_ratio2(
         hists={
-            'gen': h_gen,
+            'gen': h_gen_smeared,
             'mc': h_mc,
-            'dt': h_dt
+            'gen_smeared': h_gen
         }, 
         title='',
         outfile=f'{pdir}Z_mass_comparison_SIG',
@@ -230,9 +239,9 @@ def plot_closure(samples, hdir, pdir):
         #xrange=[80, 102],
         ratio_range = [0.85, 1.15],
         labels={
-            'gen': 'presmeared genmass',
+            'gen': 'smeared genmass',
             'mc': 'reconstructed Mass',
-            'dt': 'smeared genmass'
+            'gen_smeared': 'presmeared genmass'
         }
     )
 
@@ -240,7 +249,7 @@ def plot_closure(samples, hdir, pdir):
 
     tf = ROOT.TFile(f'{hdir}step4_closure.root', 'read')
 
-    # DATA
+    # Then show impact of gensmearing to Data
     h_tmp_data = tf.Get(f'mass_Z_roccor_it_DATA')
     h_tmp_bkg = tf.Get('mass_Z_roccor_it_WW')
     h_tmp_bkg.Add(tf.Get('mass_Z_roccor_it_WZ'))
@@ -250,44 +259,24 @@ def plot_closure(samples, hdir, pdir):
     h_tmp_mc.Add(tf.Get('mass_Z_roccor_it_SIG'))
     h_tmp_data.Scale(h_tmp_mc.Integral()/h_tmp_data.Integral())
 
-   
-    plot_ratio(
-        hists={
-            'gen': h_tmp_bkg,
-            'mc': h_tmp_mc,
-            'dt': h_tmp_data
-        }, 
-        title='',
-        outfile=f'{pdir}Z_mass_comparison_test',
-        text=['','',''],
-        #xrange=[80, 102],
-        ratio_range = [0.85, 1.15],
-        labels={
-            'gen': 'background',
-            'mc': 'MC total',
-            'dt': 'data'
-        }
-    ) 
-
-    h_gen =  tf.Get('genmass_Z_smeared_GEN')
-    h_gen.Sumw2()
-    h_gen.Scale(1./h_gen.Integral())
-
-    h_data = h_tmp_data.Clone('h_DATA-BKG')
+    h_data = h_tmp_data.Clone('mass_Z_roccor_it_data')
     h_data.Add(h_tmp_bkg, -1)
     h_data.Sumw2()
     h_data.Scale(1./h_data.Integral())
 
-    h_dt = tf.Get(f'genmass_Z_smeared_DATA_GEN')
-    h_dt.Sumw2()
-    h_dt.Scale(1./h_dt.Integral())
+    h_gen = tf.Get('genmass_Z_smeared_GEN')
+    h_gen.Sumw2()
+    h_gen.Scale(1./h_gen.Integral())
 
-
+    h_gen_smeared = tf.Get(f'genmass_Z_smeared_DATA_GEN')
+    h_gen_smeared.Sumw2()
+    h_gen_smeared.Scale(1./h_gen_smeared.Integral())
+   
     plot_ratio(
         hists={
             'gen': h_gen,
-            'mc': h_data,
-            'dt': h_dt
+            'mc': h_gen_smeared,
+            'dt': h_data
         }, 
         title='',
         outfile=f'{pdir}Z_mass_comparison_DATA',
@@ -296,7 +285,35 @@ def plot_closure(samples, hdir, pdir):
         ratio_range = [0.85, 1.15],
         labels={
             'gen': 'presmeared genmass',
-            'mc': 'reconstructed Mass',
-            'dt': 'smeared genmass'
+            'mc': 'smeared genmass (constructed reco MC)',
+            'dt': 'data'
+        }
+    ) 
+
+    # finally, show smeared reco mc vs data
+    h_gen =  tf.Get('genmass_Z_smeared_GEN')
+    h_gen.Sumw2()
+    h_gen.Scale(1./h_gen.Integral())
+
+    h_mc = tf.Get(f'mass_Z_smeared_GEN')
+    h_mc.Sumw2()
+    h_mc.Scale(1./h_mc.Integral())
+
+
+    plot_ratio(
+        hists={
+            'gen': h_gen,
+            'mc': h_mc,
+            'dt': h_data
+        }, 
+        title='',
+        outfile=f'{pdir}Z_mass_comparison_SIG_DATA',
+        text=['','',''],
+        #xrange=[80, 102],
+        ratio_range = [0.85, 1.15],
+        labels={
+            'gen': 'presmeared genmass',
+            'mc': 'smeared reco Mass',
+            'dt': 'data'
         }
     )

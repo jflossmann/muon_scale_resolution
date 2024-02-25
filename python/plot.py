@@ -15,40 +15,38 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
     
     hists['mc'].SetStats(0)
     hists['mc'].SetTitle(title)
-    hists['mc'].SetMarkerStyle(ROOT.kFullCircle)
-    hists['mc'].SetMarkerSize(.8)
-    hists['mc'].SetMarkerColor(ROOT.kBlack)
+    hists['mc'].SetFillColor(ROOT.kGray)
 
     if xrange:
         hists['mc'].GetXaxis().SetRange(xrange[0], xrange[1])
     hists['mc'].GetXaxis().SetLabelSize(0)
     hists['mc'].GetXaxis().SetTitleSize(0)
+    hists['mc'].SetLineWidth(0)
     
     hists['mc'].GetYaxis().SetRangeUser(0., 1.2* max(hists['dt'].GetMaximum(), hists['mc'].GetMaximum(), hists['gen'].GetMaximum()))
     hists['mc'].GetYaxis().SetTitle('a.u.')
     hists['mc'].GetYaxis().SetLabelSize(0.04)
     hists['mc'].GetYaxis().SetTitleSize(0.07)
     hists['mc'].GetYaxis().SetTitleOffset(0.7)
-    hists['mc'].Draw("ep")
+    hists['mc'].Draw("hist")
 
     if xrange:
         hists['dt'].GetXaxis().SetRange(xrange[0], xrange[1])
     hists['dt'].SetMarkerStyle(ROOT.kFullCircle)
-    hists['dt'].SetMarkerColor(ROOT.kRed)
+    hists['dt'].SetMarkerColor(ROOT.kBlack)
     hists['dt'].SetMarkerSize(.8)
     hists['dt'].Draw("ep same")
     ratio_data = hists['dt'].Clone()
 
     if xrange:
         hists['gen'].GetXaxis().SetRange(xrange[0], xrange[1])
-    hists['gen'].SetMarkerStyle(ROOT.kFullCircle)
-    hists['gen'].SetMarkerColor(ROOT.kGreen)
-    hists['gen'].SetMarkerSize(.8)
-    hists['gen'].Draw("ep same")
+    hists['gen'].SetLineWidth(2)
+    hists['gen'].SetLineColor(ROOT.kBlue)
+    hists['gen'].Draw("el same")
     ratio_gen = hists['gen'].Clone()
 
 
-    legend = ROOT.TLegend(0.12, 0.7, 0.3, 0.88)
+    legend = ROOT.TLegend()#0.12, 0.7, 0.3, 0.88)
     legend.AddEntry(hists['mc'], labels['mc'])
     legend.AddEntry(hists['gen'], labels['gen'])
     legend.AddEntry(hists['dt'], labels['dt'])
@@ -117,6 +115,123 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
     c.SaveAs(outfile+'.pdf')    
     c.SaveAs(outfile+".png")
     return test_chi2
+
+
+
+def plot_ratio2(hists, title, outfile, text=['','',''], xrange=None, ratio_range = [0.7, 1.3], labels={'gen':'GEN', 'mc': 'reco MC', 'gen_smeared': 'smeared Gen'}):
+    ROOT.gROOT.SetBatch(1)
+
+    c = ROOT.TCanvas("c", title, 900, 800)
+    c.Divide(1,2)
+    c.cd(1)
+    plotpad = c.GetPad(1)
+    plotpad.SetFillStyle(4000)
+    plotpad.SetPad(0, 0.21, 1, 1)
+    
+    hists['mc'].SetStats(0)
+    hists['mc'].SetTitle(title)
+    hists['mc'].SetFillColor(ROOT.kGray)
+
+    if xrange:
+        hists['mc'].GetXaxis().SetRange(xrange[0], xrange[1])
+    hists['mc'].GetXaxis().SetLabelSize(0)
+    hists['mc'].GetXaxis().SetTitleSize(0)
+    hists['mc'].SetLineWidth(0)
+    
+    hists['mc'].GetYaxis().SetRangeUser(0., 1.2* max(hists['gen_smeared'].GetMaximum(), hists['mc'].GetMaximum(), hists['gen'].GetMaximum()))
+    hists['mc'].GetYaxis().SetTitle('a.u.')
+    hists['mc'].GetYaxis().SetLabelSize(0.04)
+    hists['mc'].GetYaxis().SetTitleSize(0.07)
+    hists['mc'].GetYaxis().SetTitleOffset(0.7)
+    hists['mc'].Draw("hist")
+
+    if xrange:
+        hists['gen_smeared'].GetXaxis().SetRange(xrange[0], xrange[1])
+    hists['gen_smeared'].SetLineWidth(2)
+    hists['gen_smeared'].SetLineColor(ROOT.kBlue)
+    hists['gen_smeared'].Draw("le same")
+    ratio_data = hists['gen_smeared'].Clone()
+
+    if xrange:
+        hists['gen'].GetXaxis().SetRange(xrange[0], xrange[1])
+    hists['gen'].SetLineWidth(2)
+    hists['gen'].SetLineColor(ROOT.kRed)
+    hists['gen'].Draw("le same")
+    ratio_gen = hists['gen'].Clone()
+
+
+    legend = ROOT.TLegend()
+    legend.AddEntry(hists['mc'], labels['mc'])
+    legend.AddEntry(hists['gen'], labels['gen'])
+    legend.AddEntry(hists['gen_smeared'], labels['gen_smeared'])
+    legend.SetBorderSize(0)
+    legend.Draw('same')
+
+    #print(hists['gen_smeared'], hists['mc'])
+    #test_ad = hists['gen_smeared'].AndersonDarlingTest(hists['mc'], "D")
+    test_chi2 = hists['gen_smeared'].Chi2Test(hists['mc'], "WW CHI2/NDF")
+    #test_ks = hists['gen_smeared'].KolmogorovTest(hists['mc'], "WW")
+    cmsTex=ROOT.TLatex()
+    cmsTex.SetTextFont(42)
+    cmsTex.SetTextSize(0.025)
+    cmsTex.SetNDC()
+    cmsTex.SetTextSize(0.035)
+    cmsTex.DrawLatex(0.15,0.915,'#bf{CMS} #it{Preliminary}')
+    #cmsTex.DrawLatex(0.745, 0.92, '{} data events'.format(evts))
+    cmsTex.DrawLatex(0.75, 0.915, '(2018, 13 TeV)')
+    
+    #cmsTex.DrawLatex(0.7, 0.85, 'A-D = {}'.format(test_ad))
+    cmsTex.DrawLatex(0.68, 0.86, text[0])
+    cmsTex.DrawLatex(0.68, 0.82, text[1])
+    cmsTex.DrawLatex(0.68, 0.78, text[2])
+    cmsTex.DrawLatex(0.69, 0.65, 'chi2/NDF = {}'.format(round(test_chi2,2)))
+    #cmsTex.DrawLatex(0.7, 0.75, 'K-S = {}'.format(test_ks))
+    #pad1.SetLogy(1)
+    c.cd(2)
+    ratiopad = c.GetPad(2)
+    ratiopad.SetPad(0, 0, 1, 0.31)
+    ratiopad.SetFillStyle(4000)
+    ratiopad.SetBottomMargin(.25)
+
+    if xrange:
+        ratio_data.GetXaxis().SetRangeUser(xrange[0], xrange[1])
+    ratio_data.SetStats(0)
+    ratio_data.Divide(hists['mc'])
+    #hists['gen_smeared'].SetMarkerStyle(20)
+    ratio_data.Draw("ep")
+
+    if xrange:
+        ratio_gen.GetXaxis().SetRangeUser(xrange[0], xrange[1])
+    ratio_gen.Divide(hists['mc'])
+    ratio_gen.Draw("ep same")
+
+
+    ratio_data.GetXaxis().SetLabelSize(0.09)
+    ratio_data.GetXaxis().SetTitleOffset(0.7)
+    ratio_data.GetXaxis().SetTitleSize(0.15)
+    ratio_data.GetXaxis().SetTickSize(0.07)
+    ratio_data.GetXaxis().SetTitle('m_#mu#mu (GeV)')
+
+    ratio_data.GetYaxis().SetRangeUser(ratio_range[0], ratio_range[1])
+    ratio_data.GetYaxis().SetLabelSize(0.09)
+    ratio_data.GetYaxis().SetTitle("Gen/Reco")
+    ratio_data.GetYaxis().SetTickSize(0.03)
+    ratio_data.GetYaxis().SetTitleOffset(0.3)
+    ratio_data.GetYaxis().SetTitleSize(0.12)
+    ratio_data.SetTitle("")
+
+    xlim_hi = ratio_data.GetXaxis().GetXmax()
+    xlim_lo = ratio_data.GetXaxis().GetXmin()
+    line = ROOT.TLine(xlim_lo, 1, xlim_hi, 1)
+    line.SetLineWidth(2)
+    line.Draw("same")
+
+    c.SaveAs(outfile+'.pdf')    
+    c.SaveAs(outfile+".png")
+    return test_chi2
+
+
+
 
 
 def plot_2d_ratio(hists, outfile, binsx, binsy):

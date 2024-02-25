@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from array import array
 from argparse import ArgumentParser
 import os
+from time import time
 
 # import modules
 import python.ntuple as ntuple
@@ -56,11 +57,26 @@ def parse_args():
         action='store_true',
         help='Residual_correction'
     )
+    parser.add_argument(
+        '-B',
+        '--bootstrap',
+        default=False,
+        action='store_true',
+        help='Activate bootstrapping'
+    )
+
+    parser.add_argument(
+        "--process", 
+        type=int,
+        default=-1,
+        help="Number of condor process"
+    )
     args = parser.parse_args()
     return args
 
 
 if __name__=='__main__':
+    t0 = time()
     ROOT.gROOT.SetBatch()
 
     args = parse_args()
@@ -111,9 +127,13 @@ if __name__=='__main__':
 
     hdir = 'hists/'
     pdir = 'plots/'
+
+    if args.process > -1:
+        hdir += f'condor/{args.process}/'
+        pdir += f'condor/{args.process}/'
+
     os.makedirs(hdir, exist_ok=True)
     os.makedirs(pdir, exist_ok=True)
-
 
     # bin defintion
     pt_bins = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
@@ -131,6 +151,8 @@ if __name__=='__main__':
     mass_bins = np.linspace(75, 105, 61)
 
     nl_bins=[6.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 17.5]
+
+    ROOT.gROOT.ProcessLine(f'gRandom->SetSeed({args.process});')
 
 
     if args.ntuples:
@@ -151,6 +173,8 @@ if __name__=='__main__':
         step3.plot_closure(samples=ntuples, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=20)
 
     if args.residual:
-        step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
-        step4.perform_fits(ntuples, abseta_bins, hdir, pdir)
+        # step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir)
+        # step4.perform_fits(ntuples, abseta_bins, hdir, pdir)
         step4.plot_closure(ntuples, hdir, pdir)
+
+    print(f"Done in {round(time()-t0, 1)}s.")

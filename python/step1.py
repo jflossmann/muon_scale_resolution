@@ -2,6 +2,7 @@ import ROOT
 from array import array
 from tqdm import tqdm
 import os
+from time import time
 
 def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='')->None:
     """create histograms for inverse transversal momentum from ntuples"""
@@ -25,8 +26,11 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
                 roccor = ''
             #create RDataframe to acess data
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
+
+            rdf = rdf.Define("bs_weight", f"poisson()")
+            #print(rdf.Display(["bs_weight"], 20).Print())
             #print(ntuples[typ][sample])
-            rdf = rdf.Define("weight", "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso")
+            rdf = rdf.Define("weight", "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*bs_weight")
 
             for np in range(2):
                 #define new column for 1/pt

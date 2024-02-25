@@ -1,6 +1,17 @@
 import ROOT
 
 
+def get_rdf(path):
+    chain = ROOT.TChain("Events")
+
+    chain.AddFriend("Events", path.split('/')[-1])
+
+    #rdf = rdf.Define("weight", "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*bs_weight")
+
+    #print(rdf.Mean("weight").GetValue())
+    return chain
+
+
 def step1(rdf, hdir, typ):
     if typ in ['GEN', 'BKG']:
         typ = 'SIG'
@@ -155,4 +166,27 @@ def step4(df, hdir, typ):
                 f"genmass_Z_smeared_{dtsg}",
                 f"sqrt(2 * genpt_1_smeared_{dtsg} * genpt_2_smeared_{dtsg} * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
             )
+
+        # correct mc directly (without gen information)
+        df = df.Define(
+            "pt_1_smeared",
+            f"double pt; \
+            double k_sig = h_k_SIG->GetBinContent(h_k_SIG->FindBin(abs(eta_1))); \
+            double k_data = h_k_DATA->GetBinContent(h_k_DATA->FindBin(abs(eta_1))); \
+            pt = pt_1 * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_1_smeared/genpt_1 -1)); \
+            return pt;"
+        )
+        df = df.Define(
+            "pt_2_smeared",
+            f"double pt; \
+            double k_sig = h_k_SIG->GetBinContent(h_k_SIG->FindBin(abs(eta_2))); \
+            double k_data = h_k_DATA->GetBinContent(h_k_DATA->FindBin(abs(eta_2))); \
+            pt = pt_2 * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_2_smeared/genpt_2 -1)); \
+            return pt;"
+        )
+        df = df.Define(
+            f"mass_Z_smeared",
+            f"sqrt(2 * pt_1_smeared * pt_2_smeared * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+        )
+
     return df

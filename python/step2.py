@@ -4,7 +4,7 @@ import ROOT
 import os
 from array import array
 from time import time
-from python.plot import plot_ratio
+from python.plot import plot_ratio2
 from python.apply_corrections import step1, step2
 
 
@@ -27,7 +27,7 @@ def get_res_correction(
     
     #read data
     df = ROOT.RDataFrame("Events", ntuples_gen)
-
+    df = df.Define("bs_weight", "(int)(poisson())")
     df = step1(df, hdir, 'GEN')
 
     df = df.Define("abseta_1", "abs(eta_1)")
@@ -57,7 +57,8 @@ def get_res_correction(
         ),
         "abseta_1",
         "nTrkLayers_1",
-        "R_1"
+        "R_1",
+        "bs_weight"
     )
 
     h_3d_r2 = df.Histo3D(
@@ -69,7 +70,8 @@ def get_res_correction(
         ),
         "abseta_2",
         "nTrkLayers_2",
-        "R_2"
+        "R_2",
+        "bs_weight"
     )
 
     for eta in range(len(abseta_bins)-1):
@@ -123,7 +125,8 @@ def get_res_correction(
         ),
         "abseta_1",
         "nTrkLayers_1",
-        "pull_1"
+        "pull_1",
+        "bs_weight"
     )
     h_3d_pull2 = df.Histo3D(
         (
@@ -134,7 +137,8 @@ def get_res_correction(
         ),
         "abseta_2",
         "nTrkLayers_2",
-        "pull_2"
+        "pull_2",
+        "bs_weight"
     )
 
     h_3d_pull1.Sumw2()
@@ -169,7 +173,8 @@ def get_res_correction(
             ),
             "nTrkLayers_1",
             "genpt_1",
-            "R_1"
+            "R_1",
+            "bs_weight"
         )
 
         h_3d_r_poly2 = df_tmp_1.Histo3D(
@@ -181,7 +186,8 @@ def get_res_correction(
             ),
             "nTrkLayers_1",
             "genpt_1",
-            "R_1"
+            "R_1",
+            "bs_weight"
         )
 
         for nl in range(len(nl_bins)-1):
@@ -197,7 +203,7 @@ def get_res_correction(
 
             h_tmp.Scale(1./h_tmp.Integral())
 
-            x = ROOT.RooRealVar("x", "m_vis (GeV)", -5, 5)
+            x = ROOT.RooRealVar("x", "pull", -5, 5)
             x.setBins(10000,"cache")
             x.setMin("cache", -10)
             x.setMax("cache", 10)
@@ -241,6 +247,13 @@ def get_res_correction(
                 c1.Update()
                 c1.Modified()
 
+                cmsTex=ROOT.TLatex()
+                cmsTex.SetTextFont(42)
+                cmsTex.SetTextSize(0.025)
+                cmsTex.SetNDC()
+                cmsTex.DrawLatex(0.2,0.85,f'Mean: {round(mean.getVal(),2)} #pm {round(mean.getError(), 2)}')
+                cmsTex.DrawLatex(0.2,0.8,f'Sigma: {round(sigma.getVal(),2)} #pm {round(sigma.getError(), 2)}')
+
                 # Optionally, save the plot as an image
                 c1.SaveAs(f"./{pdir}CB_fits_new/eta{eta}_nL{nl}.png")
                 c1.Clear()
@@ -257,8 +270,8 @@ def get_res_correction(
                     std = h_tmp_pt.GetStdDev()
                     std_err = std / (2 * h_tmp_pt.GetEntries() - 2)**.5
 
-                    sigma_hist.SetBinContent(pt, std)
-                    sigma_hist.SetBinError(pt, std_err)
+                    sigma_hist.SetBinContent(pt+1, std)
+                    sigma_hist.SetBinError(pt+1, std_err)
 
             # Define the second-order polynomial function
             polynomial = ROOT.TF1("polynomial", "[0] + [1]*x + [2]*x*x")
@@ -281,6 +294,11 @@ def get_res_correction(
                 # Plot the histogram
                 sigma_hist.SetMarkerStyle(ROOT.kFullCircle)
                 sigma_hist.Draw("ep")
+                sigma_hist.SetStats(0)
+                sigma_hist.GetXaxis().SetTitle('pT (GeV)')
+                sigma_hist.GetYaxis().SetTitle('#sigma (R)')
+                sigma_hist.GetYaxis().SetTitleOffset(1.5)
+                c1.SetLeftMargin(.1)
 
                 # Plot the fitted function
                 polynomial.SetLineColor(ROOT.kRed)  # Set the color to red
@@ -309,7 +327,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
     #ROOT.gROOT.ProcessLine('tf->Close()')
 
     df = ROOT.RDataFrame("Events", ntuples_gen)
-
+    df = df.Define("bs_weight", "(int)(poisson())")
     df = step1(df, hdir, 'GEN')
     df = step2(df, hdir, 'GEN')
 
@@ -321,21 +339,24 @@ def plot_closure(ntuples_gen, hdir, pdir):
                 'h_gen', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'genmass_Z'
+            'genmass_Z',
+            "bs_weight"
         ),
         df.Histo1D(
             (
                 'h_gen_smeared', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'genmass_Z_smeared'
+            'genmass_Z_smeared',
+            "bs_weight"
         ),
         df.Histo1D(
             (
                 'h_mc', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'mass_Z_roccor'
+            'mass_Z_roccor',
+            "bs_weight"
         ),
     ]
 
@@ -347,21 +368,24 @@ def plot_closure(ntuples_gen, hdir, pdir):
                 'h_gen_zoom', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'genmass_Z'
+            'genmass_Z',
+            "bs_weight"
         ),
         df.Histo1D(
             (
                 'h_gen_smeared_zoom', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'genmass_Z_smeared'
+            'genmass_Z_smeared',
+            "bs_weight"
         ),
         df.Histo1D(
             (
                 'h_mc_zoom', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'mass_Z_roccor'
+            'mass_Z_roccor',
+            "bs_weight"
         )
     ]
 
@@ -375,19 +399,19 @@ def plot_closure(ntuples_gen, hdir, pdir):
     h_gen.Sumw2()
     h_gen.Scale(1./h_gen.Integral())
 
-    h_mc = tf.Get('h_gen_smeared')
+    h_mc = tf.Get('h_mc')
     h_mc.Sumw2()
     h_mc.Scale(1./h_mc.Integral())
 
-    h_dt = tf.Get('h_mc')
-    h_dt.Sumw2()
-    h_dt.Scale(1./h_dt.Integral())
+    h_gensm = tf.Get('h_gen_smeared')
+    h_gensm.Sumw2()
+    h_gensm.Scale(1./h_gensm.Integral())
 
-    plot_ratio(
+    plot_ratio2(
         hists={
             'gen': h_gen,
             'mc': h_mc,
-            'dt': h_dt
+            'gen_smeared': h_gensm
         }, 
         title='',
         outfile=f'{pdir}Z_mass_comparison',
@@ -395,15 +419,15 @@ def plot_closure(ntuples_gen, hdir, pdir):
         #xrange=[60, 120],
         labels={
             'gen': 'Generated mass',
-            'mc': 'smeared Gen Mass',
-            'dt': 'reconstructed Mass'
+            'mc': 'reconstructed Mass',
+            'gen_smeared': 'smeared Gen Mass'
         }
     )
-    plot_ratio(
+    plot_ratio2(
         hists={
             'gen': tf.Get('h_gen_zoom'),
-            'mc': tf.Get('h_gen_smeared_zoom'),
-            'dt': tf.Get('h_mc_zoom')
+            'mc': tf.Get('h_mc_zoom'),
+            'gen_smeared': tf.Get('h_gen_smeared_zoom')
         }, 
         title='',
         outfile=f'{pdir}Z_mass_comparison_zoom',
@@ -412,7 +436,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
         ratio_range=[0.9, 1.1],
         labels={
             'gen': 'Generated mass',
-            'mc': 'smeared Gen Mass',
-            'dt': 'reconstructed Mass'
+            'mc': 'reconstructed Mass',
+            'gen_smeared': 'smeared Gen Mass'
         }
     )
