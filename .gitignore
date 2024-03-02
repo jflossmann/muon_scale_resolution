@@ -7,3 +7,5 @@
 **.json
 **.pyc
 data/scaleFactors/
+hists/
+uncertainties/condor_jobs/
