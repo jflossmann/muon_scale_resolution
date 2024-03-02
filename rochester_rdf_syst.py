@@ -73,8 +73,8 @@ def parse_args():
     )
     parser.add_argument(
         "--syst", 
-        default=False,
-        action='store_true',
+        type=str,
+        default='',
         help="Evaluate systematic. Only one at a time!"
     )
 
@@ -134,15 +134,6 @@ if __name__=='__main__':
     hdir = 'hists/'
     pdir = 'plots/'
 
-    if args.process > -1:
-        hdir += f'condor/{args.process}/'
-        pdir += f'condor/{args.process}/'
-
-    os.makedirs(hdir, exist_ok=True)
-    os.makedirs(pdir, exist_ok=True)
-
-    # TODO implement different binnings for step 1, 3, 4
-
     # bin defintion
     pt_bins = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
     oneOverPt_bins = np.linspace(0.019,0.027, 50)
@@ -162,14 +153,59 @@ if __name__=='__main__':
 
     nl_bins=[6.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 17.5]
 
+    weight = "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso"
+
     ROOT.gROOT.ProcessLine(f'gRandom->SetSeed({args.process});')
 
-    if args.process == -1:
-        weight = "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso"
+    # make sure that hists and plots are saved in different places for syst evaluation
+    if args.process == -1 and args.syst=='':
+        # this is the nominal case
+        print("Nominal case.")
+
+    elif '1' in args.syst and args.process > -1:
+        oneOverPt_bins = np.linspace(
+            0.022 - 0.001 * (args.process+1),
+            0.024 - 0.001 * (args.process+1),
+            40 + (args.process+1) * 5
+        )
+        hdir += f'condor/bin_step1/{args.process}/'
+        pdir += f'condor/bin_step1/{args.process}/'
+
+    elif '3' in args.syst and args.process > -1:
+        m_bins_3 = np.linspace(
+            91 - 2.5 - 0.5*args.process,
+            91 + 2.5 + 0.5*args.process,
+            50 + 10 * args.process
+        )
+        hdir += f'condor/bin_step3/{args.process}/'
+        pdir += f'condor/bin_step3/{args.process}/'
+
+    elif '4' in args.syst and args.process > -1:
+        m_bins_4 = np.linspace(
+            91 - 5 - args.process,
+            91 + 5 + args.process,
+            20 + 4 * args.process
+        )
+        hdir += f'condor/bin_step4/{args.process}/'
+        pdir += f'condor/bin_step4/{args.process}/'
+
+    elif 'zPt' in args.syst:
+        weight = "genWeight/sumwWeight*xsec*sf_id*sf_iso"
+        hdir += 'condor/no_zPt/'
+        pdir += 'condor/no_zPt/'
+
+    elif 'stat' in args.syst and args.process > -1:
+        weight = "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*bs_weight"
+        hdir += f'condor/{args.process}/'
+        pdir += f'condor/{args.process}/'
 
     else:
-        weight = "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*bs_weight"
+        print("somethings broken. Please check input!")
 
+    os.makedirs(hdir, exist_ok=True)
+    os.makedirs(pdir, exist_ok=True)
+
+ 
     if args.ntuples:
         ntuple.make_ntuples(nanoAODs, datasets, datadir)
         ntuple.hist_zpt(ntuples_raw, pt_bins, hdir)
@@ -189,8 +225,8 @@ if __name__=='__main__':
         step3.plot_closure(samples=ntuples, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=itsteps)
 
     if args.residual:
-        # step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight)
-        # step4.perform_fits(ntuples, abseta_bins, hdir, pdir, m_bins_4)
+        step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight)
+        step4.perform_fits(ntuples, abseta_bins, hdir, pdir, m_bins_4)
         step4.plot_closure(ntuples, hdir, pdir, weight, m_bins_4)
 
     print(f"Done in {round(time()-t0, 1)}s.")
