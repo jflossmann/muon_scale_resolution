@@ -12,7 +12,8 @@ def get_res_correction(
         ntuples_gen,
         pull_bins, r_bins, abseta_bins, nl_bins, pt_bins,
         pdir , hdir,
-        do_plot
+        do_plot,
+        weight
     ):
 
     ROOT.gROOT.SetBatch(1)
@@ -28,6 +29,7 @@ def get_res_correction(
     #read data
     df = ROOT.RDataFrame("Events", ntuples_gen)
     df = df.Define("bs_weight", "(int)(poisson())")
+    df = df.Define("weight", weight)
     df = step1(df, hdir, 'GEN')
 
     df = df.Define("abseta_1", "abs(eta_1)")
@@ -58,7 +60,7 @@ def get_res_correction(
         "abseta_1",
         "nTrkLayers_1",
         "R_1",
-        "bs_weight"
+        "weight"
     )
 
     h_3d_r2 = df.Histo3D(
@@ -71,7 +73,7 @@ def get_res_correction(
         "abseta_2",
         "nTrkLayers_2",
         "R_2",
-        "bs_weight"
+        "weight"
     )
 
     for eta in range(len(abseta_bins)-1):
@@ -126,7 +128,7 @@ def get_res_correction(
         "abseta_1",
         "nTrkLayers_1",
         "pull_1",
-        "bs_weight"
+        "weight"
     )
     h_3d_pull2 = df.Histo3D(
         (
@@ -138,7 +140,7 @@ def get_res_correction(
         "abseta_2",
         "nTrkLayers_2",
         "pull_2",
-        "bs_weight"
+        "weight"
     )
 
     h_3d_pull1.Sumw2()
@@ -174,7 +176,7 @@ def get_res_correction(
             "nTrkLayers_1",
             "genpt_1",
             "R_1",
-            "bs_weight"
+            "weight"
         )
 
         h_3d_r_poly2 = df_tmp_1.Histo3D(
@@ -187,7 +189,7 @@ def get_res_correction(
             "nTrkLayers_1",
             "genpt_1",
             "R_1",
-            "bs_weight"
+            "weight"
         )
 
         for nl in range(len(nl_bins)-1):
@@ -316,7 +318,7 @@ def get_res_correction(
 
 
 
-def plot_closure(ntuples_gen, hdir, pdir):
+def plot_closure(ntuples_gen, hdir, pdir, weight):
     use_CB_smear=True
     pdir = pdir+'resolution/'
     
@@ -328,6 +330,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
 
     df = ROOT.RDataFrame("Events", ntuples_gen)
     df = df.Define("bs_weight", "(int)(poisson())")
+    df = df.Define("weight", weight)
     df = step1(df, hdir, 'GEN')
     df = step2(df, hdir, 'GEN')
 
@@ -340,7 +343,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
                 len(m_bins)-1, array('d', m_bins)
             ),
             'genmass_Z',
-            "bs_weight"
+            "weight"
         ),
         df.Histo1D(
             (
@@ -348,7 +351,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
                 len(m_bins)-1, array('d', m_bins)
             ),
             'genmass_Z_smeared',
-            "bs_weight"
+            "weight"
         ),
         df.Histo1D(
             (
@@ -356,7 +359,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
                 len(m_bins)-1, array('d', m_bins)
             ),
             'mass_Z_roccor',
-            "bs_weight"
+            "weight"
         ),
     ]
 
@@ -369,7 +372,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
                 len(m_bins)-1, array('d', m_bins)
             ),
             'genmass_Z',
-            "bs_weight"
+            "weight"
         ),
         df.Histo1D(
             (
@@ -377,7 +380,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
                 len(m_bins)-1, array('d', m_bins)
             ),
             'genmass_Z_smeared',
-            "bs_weight"
+            "weight"
         ),
         df.Histo1D(
             (
@@ -385,7 +388,7 @@ def plot_closure(ntuples_gen, hdir, pdir):
                 len(m_bins)-1, array('d', m_bins)
             ),
             'mass_Z_roccor',
-            "bs_weight"
+            "weight"
         )
     ]
 

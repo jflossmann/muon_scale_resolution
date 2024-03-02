@@ -8,15 +8,16 @@ from python.plot import roofit_mass, plot_ratio, plot_ratio2
 from python.apply_corrections import step1, step2, step3, step4
 
 
-def residual_correction(samples, abseta_bins, hdir, pdir):
+def residual_correction(samples, abseta_bins, hdir, pdir, weight):
 
-    #dict for results
+    # here the binning does not need to be changed for syst eval,
+    # since only part of range is used in fit anyway
     m_bins = np.linspace(60, 120, 120)
     
-    # n=8
     #get gen data
     df_gen = ROOT.RDataFrame("Events", samples["GEN"]["GEN"])
     df_gen = df_gen.Define("bs_weight", "(int)(poisson())")
+    df_gen = df_gen.Define("weight", weight)
     df_gen = step1(df_gen, hdir, 'GEN')
     df_gen = step2(df_gen, hdir, 'GEN')
     df_gen = df_gen.Define("abseta_1", "abs(eta_1)").Define("abseta_2", "abs(eta_2)")
@@ -33,7 +34,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
         ),
         "abseta_1",
         "genmass_Z", 
-        "bs_weight"
+        "weight"
     )
     h_gen_mass_2 = df_gen.Histo2D(
         (
@@ -43,7 +44,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
         ),
         "abseta_2",
         "genmass_Z", 
-        "bs_weight"
+        "weight"
     )
     h_gen_mass_smeared_1 = df_gen.Histo2D(
         (
@@ -53,7 +54,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
         ),
         "abseta_1",
         "genmass_Z_smeared", 
-        "bs_weight"
+        "weight"
     )
     h_gen_mass_smeared_2 = df_gen.Histo2D(
         (
@@ -63,7 +64,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
         ),
         "abseta_2",
         "genmass_Z_smeared", 
-        "bs_weight"
+        "weight"
     )
 
     for typ in samples:
@@ -74,6 +75,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                 #read data into dataframe
                 df_reco = ROOT.RDataFrame("Events", samples[typ][subtyp])
                 df_reco = df_reco.Define("bs_weight", "(int)(poisson())")
+                df_reco = df_reco.Define("weight", weight)
                 df_reco = step1(df_reco, hdir, typ)
                 df_reco = step3(df_reco, hdir, typ)
                 df_reco = df_reco.Define("abseta_1", "abs(eta_1)")
@@ -88,7 +90,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                     ),
                     "abseta_1",
                     "mass_Z_roccor_it", 
-                    "bs_weight"
+                    "weight"
                 )
                 h_mass_reco_2 = df_reco.Histo2D(
                     (
@@ -98,7 +100,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                     ),
                     "abseta_2",
                     "mass_Z_roccor_it", 
-                    "bs_weight"
+                    "weight"
                 )
 
                 tf = ROOT.TFile(f'{hdir}step4_{typ}.root', 'recreate')
@@ -129,7 +131,9 @@ def residual_correction(samples, abseta_bins, hdir, pdir):
                 tf.Close()
 
 
-def perform_fits(samples, abseta_bins, hdir, pdir):
+def perform_fits(samples, abseta_bins, hdir, pdir, m_bins):
+
+    massrange = [m_bins[0], m_bins[-1]]
 
     hists = []
     pdir = pdir+'residual/residual/'
@@ -155,8 +159,8 @@ def perform_fits(samples, abseta_bins, hdir, pdir):
 
                     print(h_gen, h_gen_smeared, h_reco)
 
-                    results_gen, errors_gen = roofit_mass(h_gen, h_gen_smeared, plot=f'{pdir}template_fits/gensmeared_{eta}', fitf='template', tag='')
-                    results_reco, errors_reco = roofit_mass(h_gen, h_reco, plot=f'{pdir}template_fits/{typ}_{eta}', fitf='template', tag='')
+                    results_gen, errors_gen = roofit_mass(h_gen, h_gen_smeared, plot=f'{pdir}template_fits/gensmeared_{eta}', fitf='template', tag='', massrange=massrange)
+                    results_reco, errors_reco = roofit_mass(h_gen, h_reco, plot=f'{pdir}template_fits/{typ}_{eta}', fitf='template', tag='', massrange=massrange)
 
                     hists[-1].SetBinContent(eta+1, results_reco[1]/results_gen[1])
 
@@ -170,9 +174,8 @@ def perform_fits(samples, abseta_bins, hdir, pdir):
 
 
 
-def plot_closure(samples, hdir, pdir):
+def plot_closure(samples, hdir, pdir, weight, m_bins):
     pdir += 'residual/'
-    m_bins = np.linspace(80, 102, 44)
     hists = []
 
     for typ in tqdm(samples):
@@ -180,6 +183,7 @@ def plot_closure(samples, hdir, pdir):
         for subtyp in samples[typ]:
             df = ROOT.RDataFrame("Events", samples[typ][subtyp])
             df = df.Define("bs_weight", "(int)(poisson())")
+            df = df.Define("weight", weight)
 
             df = step1(df, hdir, typ)
             df = step2(df, hdir, typ)
@@ -190,8 +194,6 @@ def plot_closure(samples, hdir, pdir):
                 h_names = ['genmass_Z_smeared_SIG', 'genmass_Z_smeared_DATA', 'genmass_Z_smeared', "mass_Z_smeared"]
             else: 
                 h_names = ['mass_Z_roccor_it']
-
-            df = df.Define("weight", "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*bs_weight")
 
             for h in h_names:
                 hists.append(
@@ -285,7 +287,7 @@ def plot_closure(samples, hdir, pdir):
         ratio_range = [0.85, 1.15],
         labels={
             'gen': 'presmeared genmass',
-            'mc': 'smeared genmass (constructed reco MC)',
+            'mc': 'smeared genmass',
             'dt': 'data'
         }
     ) 

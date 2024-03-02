@@ -4,6 +4,7 @@ import yaml
 import time
 from multiprocessing import Pool, RLock
 from tqdm import tqdm
+import os
 
 # function in c++ code. Finds indices of muons closest to z boson mass
 ROOT.gInterpreter.Declare("""
@@ -70,38 +71,8 @@ ROOT.gInterpreter.Declare("""
     }
 """)
 
-# function in c++ code. Finds indices of muons matched to HLT; TODO look up definition of hlt
-#ROOT.gInterpreter.Declare(
-"""
-    ROOT::VecOps::RVec<Int_t> get_hlt_matches(
-        UInt_t nMuon,
-        ROOT::VecOps::RVec<Float_t> *Muon_pt,
-        ROOT::VecOps::RVec<Float_t> *Muon_eta,
-        ROOT::VecOps::RVec<Float_t> *Muon_phi,
-        ROOT::VecOps::RVec<Float_t> *hlt_eta,
-        ROOT::VecOps::RVec<Float_t> *hlt_phi,
-        ROOT::VecOps::RVec<Float_t> *Muon_tkRelIso,
-        ROOT::VecOps::RVec<Float_t> *Muon_mediumPromptId
-        ){
-        ROOT::VecOps::RVec<Int_t> muon_hlt_match;
-        for(int i=0; i<nMuon; i++){
-            if(muon_hlt_match.size()>1) continue;
-            Float_t deltaR=1000;
-            if (Muon_pt->at(i) < 10) continue;
-            if(fabs(Muon_eta->at(i) > 2.4)) continue;
-            if(Muon_tkRelIso->at(i) > 0.1) continue;
-            if(Muon_mediumPromptId->at(i)) continue;
-            for(int j=0; j<hlt_eta.size(); j++){
-                dEta = Muon_eta->at(i) - hlt_eta->at(j);
-                dPhi = Muon_phi->at(i) - hlt_phi->at(j);
-                deltaR = sqrt(dEta*dEta + dPhi*dPhi);
-                if(deltaR < 0.35) muon_hlt_match.push_back(i);
-            }
-        }
-    return muon_hlt_matches;
-    }
-"""
-#)
+
+# TODO: check if event in golden lumi json
 
 
 # function in c++ code. Finds indices of muons matched to GEN
@@ -165,8 +136,10 @@ def hist_zpt(ntuples, pt_bins, hdir):
     for typ in ntuples:
         for sample in ntuples[typ]:
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
+            print(ntuples[typ][sample])
 
             h = rdf.Histo1D((f"h_Zboson_pt_{sample}", "", len(pt_bins)-1, array('f', pt_bins)), "pt_Z", 'genWeight')
+            print(h.Integral())
             h.Scale(1./h.Integral())
             hists.append(h)
 
@@ -194,25 +167,29 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
     ROOT.gROOT.ProcessLine('TH1D* h_ratio = (TH1D*)h_dt->Clone();')
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
 
-    for sf in SFs:        
+    for sf in SFs:
         ROOT.gROOT.ProcessLine(f'TFile* tf_{sf} = TFile::Open("{SFs[sf][0]}", "read");')
-        ROOT.gROOT.ProcessLine(f'TH2F* h_{sf} = (TH2F*)tf_id->Get("{SFs[sf][1]}");')
+        ROOT.gROOT.ProcessLine(f'TH2F* h_{sf} = (TH2F*)tf_{sf}->Get("{SFs[sf][1]}");')        
 
     for typ in ntuples:
         for sample in ntuples[typ]:
+            if sample !='SIG' : continue
             print(sample)
-            sampleyaml = yaml_loader(ntuples[typ][sample].replace('_*.root', '.yaml'))
+            sampleyaml = yaml_loader(ntuples[typ][sample].replace('_*.root', '.yaml').replace('ntuples/', ''))
 
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
             rdf = rdf.Define('sumwWeight', str(sampleyaml['genweight']))
             rdf = rdf.Define('xsec', str(sampleyaml['xsec']))
-            if typ == "DATA":
+            if typ != "SIG" and typ != "GEN":
                 rdf = rdf.Define("zPtWeight", "1")
+            else:
+                rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
+
+            if typ == 'DATA':
                 for sf in SFs:
                     rdf = rdf.Define(f"sf_{sf}_1", "1")
                     rdf = rdf.Define(f"sf_{sf}_2", "1")
             else:
-                rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
                 for sf in SFs:
                     rdf = rdf.Define(
                         f"sf_{sf}_1",
@@ -231,7 +208,7 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
             for sf in SFs:
                 rdf = rdf.Define(f"sf_{sf}", f"sf_{sf}_1 * sf_{sf}_2")
 
-            rdf.Snapshot("Events", ntuples[typ][sample].replace("*.root", "zPt.root"))
+            rdf.Snapshot("Events", ntuples[typ][sample].replace("*.root", "zPt.root").replace('ntuples/',''))
 
     return
 
@@ -240,8 +217,10 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
 # function which creates ntuple files from nanoaod
 def make_ntuples(nanoAODs, datasets, datadir):
 
-    nanoAODs = ntuple.yaml_loader(nanoAODs)
-    datasets = ntuple.yaml_loader(datasets)
+    os.makedirs(datadir, exist_ok=True)
+
+    nanoAODs = yaml_loader(nanoAODs)
+    datasets = yaml_loader(datasets)
 
     for sample in nanoAODs:
 
@@ -296,6 +275,7 @@ def process_ntuples(datasets, sample, _file, number, datadir):
     genweight = rdf.Sum("genWeight").GetValue()
     
     # only collect events w/ >1 muon and find muon pair closest to z mass. Muon1 is always charge -1 and muon2 always +1
+    rdf = rdf.Filter("HLT_IsoMu24 == 1")
     rdf = rdf.Filter("Muon_pt.size() > 1")
     rdf = rdf.Define("ind", """ROOT::VecOps::RVec<Int_t> (get_indices(
                                 nMuon,
@@ -407,3 +387,11 @@ def yaml_loader(fname):
         dsets = yaml.load(f, Loader=yaml.Loader)
     #print(dsets)
     return dsets
+
+
+
+ROOT.gInterpreter.Declare("""
+        int poisson(){
+            return gRandom->Poisson(1);
+        }
+""")

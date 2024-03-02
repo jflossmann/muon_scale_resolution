@@ -4,7 +4,7 @@ from tqdm import tqdm
 import os
 from time import time
 
-def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr='')->None:
+def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, weight)->None:
     """create histograms for inverse transversal momentum from ntuples"""
 
     hists = {}
@@ -18,23 +18,19 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
 
         for sample in ntuples[typ]:
             #print(sample)
-            gen, sgen = "", ""
-            roccor = corr
+            gen = ""
             if typ == "GEN":
-                sgen = "smearedgen"
                 gen = 'gen'
-                roccor = ''
             #create RDataframe to acess data
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
 
             rdf = rdf.Define("bs_weight", f"poisson()")
-            #print(rdf.Display(["bs_weight"], 20).Print())
-            #print(ntuples[typ][sample])
-            rdf = rdf.Define("weight", "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*bs_weight")
+            
+            rdf = rdf.Define("weight", weight)
 
             for np in range(2):
                 #define new column for 1/pt
-                rdf = rdf.Define(f"oneOverPt_{np+1}", f"1./{sgen}pt_{np+1}{roccor}") # TODO check sgen vs gen
+                rdf = rdf.Define(f"oneOverPt_{np+1}", f"1./{gen}pt_{np+1}")
                 #create 3D histogram
                 h_3d = rdf.Histo3D(
                     (
@@ -77,7 +73,7 @@ def hist_oneOverpT(ntuples, oneOverPt_bins, eta_bins, phi_bins, hdir, pdir, corr
             hists["tosave"] += [h.Project3DProfile("yx")]            
         
     #save
-    tf = ROOT.TFile(f"{hdir}step1_oneOverPt{corr}.root","RECREATE")
+    tf = ROOT.TFile(f"{hdir}step1_oneOverPt.root","RECREATE")
     for h in hists["tosave"]:
         h.Write()
     tf.Close()

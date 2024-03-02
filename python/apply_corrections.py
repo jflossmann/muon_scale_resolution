@@ -173,7 +173,7 @@ def step4(df, hdir, typ):
             f"double pt; \
             double k_sig = h_k_SIG->GetBinContent(h_k_SIG->FindBin(abs(eta_1))); \
             double k_data = h_k_DATA->GetBinContent(h_k_DATA->FindBin(abs(eta_1))); \
-            pt = pt_1 * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_1_smeared/genpt_1 -1)); \
+            pt = pt_1_roccor_it * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_1_smeared/genpt_1 -1)); \
             return pt;"
         )
         df = df.Define(
@@ -181,7 +181,7 @@ def step4(df, hdir, typ):
             f"double pt; \
             double k_sig = h_k_SIG->GetBinContent(h_k_SIG->FindBin(abs(eta_2))); \
             double k_data = h_k_DATA->GetBinContent(h_k_DATA->FindBin(abs(eta_2))); \
-            pt = pt_2 * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_2_smeared/genpt_2 -1)); \
+            pt = pt_2_roccor_it * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_2_smeared/genpt_2 -1)); \
             return pt;"
         )
         df = df.Define(

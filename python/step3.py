@@ -8,9 +8,7 @@ import os
 from time import time
 from python.apply_corrections import step1, step2
 
-def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
-    iterationsteps = 20
-    mass_bins = np.linspace(86, 96, 100)
+def iterative_correction(samples, eta_bins, phi_bins, mass_bins, hdir, pdir, iterationsteps, weight):
     masspt_bins = np.linspace(0, 1e4, 1000)
     q_bins = [-1, 0, 1]
     pdir += 'iterative/'
@@ -19,6 +17,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
 
     df_gen = ROOT.RDataFrame("Events", samples['GEN']['GEN'])
     df_gen = df_gen.Define("bs_weight", "(int)(poisson())")
+    df_gen = df_gen.Define("weight", weight)
     df_gen = step1(df_gen, hdir, 'GEN')
     df_gen = step2(df_gen, hdir, 'GEN')
     df_gen = df_gen.Filter('genmass_Z_smeared > 86 && genmass_Z_smeared < 96')
@@ -33,7 +32,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
         'eta_1',
         'phi_1',
         'genmass_Z_smeared',
-        "bs_weight"
+        "weight"
     )
     h_gen_p = df_gen.Histo3D(
         (
@@ -45,7 +44,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
         'eta_2',
         'phi_2',
         'genmass_Z_smeared',
-        "bs_weight"
+        "weight"
     )
 
     gen_means_n = h_gen_n.Project3DProfile(option='yx')
@@ -87,6 +86,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                 #read data into dataframe
                 df_reco = ROOT.RDataFrame("Events", samples[typ][subtyp])
                 df_reco = df_reco.Define("bs_weight", "(int)(poisson())")
+                df_reco = df_reco.Define("weight", weight)
                 df_reco = step1(df_reco, hdir, typ)
                 df_reco = df_reco.Define(f'mass_Z_roccor_it', 'mass_Z_roccor')
                 df_reco = df_reco.Define('pt_1_roccor_it', 'pt_1_roccor')
@@ -112,7 +112,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         'eta_1',
                         'phi_1',
                         mass,
-                        "bs_weight"
+                        "weight"
                     )
                     h_reco_p = df_reco_f.Histo3D(
                         (
@@ -124,7 +124,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         'eta_2',
                         'phi_2',
                         mass,
-                        "bs_weight"
+                        "weight"
                     )
 
                     df_reco_f = df_reco_f.Redefine(f"masspt_1", f"{mass} * pt_1_roccor_it")
@@ -140,7 +140,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         'eta_1',
                         'phi_1',
                         f'masspt_1',
-                        "bs_weight"
+                        "weight"
                     )
                     h_reco_mpt_p = df_reco_f.Histo3D(
                         (
@@ -152,7 +152,7 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                         'eta_2',
                         'phi_2',
                         f'masspt_2',
-                        "bs_weight"
+                        "weight"
                     )
 
                     reco_means_n = h_reco_n.Project3DProfile(option='yx')
@@ -231,9 +231,9 @@ def iterative_correction(samples, eta_bins, phi_bins, hdir, pdir):
                 tf.Close()
             
             rang = np.linspace(86, 96, 60)
-            h_mass_it = df_reco.Histo1D(('h_mass_it', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor_it', "bs_weight")
-            h_mass = df_reco.Histo1D(('h_mass', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor', "bs_weight")
-            h_mass_gen = df_gen.Histo1D(('h_mass_gen', '', len(rang)-1, array('d', rang)), 'genmass_Z_smeared', "bs_weight")
+            h_mass_it = df_reco.Histo1D(('h_mass_it', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor_it', "weight")
+            h_mass = df_reco.Histo1D(('h_mass', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor', "weight")
+            h_mass_gen = df_gen.Histo1D(('h_mass_gen', '', len(rang)-1, array('d', rang)), 'genmass_Z_smeared', "weight")
 
             tf = ROOT.TFile(f'{hdir}step3_closure_{typ}.root', 'recreate')
             h_mass_it.Write()
