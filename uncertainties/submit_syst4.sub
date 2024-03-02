@@ -1,5 +1,5 @@
 ## Executable that will be run in job (has to be executable)
-executable = ./job.sh
+executable = ./job_syst4.sh
 
 arguments = $(Process)
 
@@ -37,5 +37,5 @@ docker_image = mschnepf/slc7-condocker
 ## Copy local variables to job
 getenv = True
 
-numJobs = 96
+numJobs = 21
 queue $(numJobs)
