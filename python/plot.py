@@ -55,7 +55,8 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
 
     #print(hists['dt'], hists['mc'])
     #test_ad = hists['dt'].AndersonDarlingTest(hists['mc'], "D")
-    test_chi2 = hists['dt'].Chi2Test(hists['mc'], "WW CHI2/NDF")
+    test_chi2_dt = hists['dt'].Chi2Test(hists['mc'], "WW CHI2/NDF")
+    test_chi2_gen = hists['gen'].Chi2Test(hists['mc'], "WW CHI2/NDF")
     #test_ks = hists['dt'].KolmogorovTest(hists['mc'], "WW")
     cmsTex=ROOT.TLatex()
     cmsTex.SetTextFont(42)
@@ -70,7 +71,8 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
     cmsTex.DrawLatex(0.68, 0.86, text[0])
     cmsTex.DrawLatex(0.68, 0.82, text[1])
     cmsTex.DrawLatex(0.68, 0.78, text[2])
-    cmsTex.DrawLatex(0.69, 0.65, 'chi2/NDF = {}'.format(round(test_chi2,2)))
+    cmsTex.DrawLatex(0.69, 0.65, 'chi2/NDF = {}'.format(round(test_chi2_dt,2)))
+    cmsTex.DrawLatex(0.69, 0.62, '#color[{}]{{chi2/NDF = {}}}'.format(ROOT.kBlue, round(test_chi2_gen,2)))
     #cmsTex.DrawLatex(0.7, 0.75, 'K-S = {}'.format(test_ks))
     #pad1.SetLogy(1)
     c.cd(2)
@@ -114,7 +116,7 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
 
     c.SaveAs(outfile+'.pdf')    
     c.SaveAs(outfile+".png")
-    return test_chi2
+    return test_chi2_dt
 
 
 
@@ -169,7 +171,8 @@ def plot_ratio2(hists, title, outfile, text=['','',''], xrange=None, ratio_range
 
     #print(hists['gen_smeared'], hists['mc'])
     #test_ad = hists['gen_smeared'].AndersonDarlingTest(hists['mc'], "D")
-    test_chi2 = hists['gen_smeared'].Chi2Test(hists['mc'], "WW CHI2/NDF")
+    test_chi2_gen = hists['gen'].Chi2Test(hists['mc'], "WW CHI2/NDF")
+    test_chi2_gensm = hists['gen_smeared'].Chi2Test(hists['mc'], "WW CHI2/NDF")
     #test_ks = hists['gen_smeared'].KolmogorovTest(hists['mc'], "WW")
     cmsTex=ROOT.TLatex()
     cmsTex.SetTextFont(42)
@@ -184,7 +187,8 @@ def plot_ratio2(hists, title, outfile, text=['','',''], xrange=None, ratio_range
     cmsTex.DrawLatex(0.68, 0.86, text[0])
     cmsTex.DrawLatex(0.68, 0.82, text[1])
     cmsTex.DrawLatex(0.68, 0.78, text[2])
-    cmsTex.DrawLatex(0.69, 0.65, 'chi2/NDF = {}'.format(round(test_chi2,2)))
+    cmsTex.DrawLatex(0.69, 0.65, '#color[{}]{{chi2/NDF = {}}}'.format(ROOT.kRed, round(test_chi2_gen)))
+    cmsTex.DrawLatex(0.69, 0.62, '#color[{}]{{chi2/NDF = {}}}'.format(ROOT.kBlue, round(test_chi2_gensm,2)))
     #cmsTex.DrawLatex(0.7, 0.75, 'K-S = {}'.format(test_ks))
     #pad1.SetLogy(1)
     c.cd(2)
@@ -228,7 +232,7 @@ def plot_ratio2(hists, title, outfile, text=['','',''], xrange=None, ratio_range
 
     c.SaveAs(outfile+'.pdf')    
     c.SaveAs(outfile+".png")
-    return test_chi2
+    return test_chi2_gen
 
 
 
@@ -406,7 +410,7 @@ def plot_stuff(pdir, eta_bins, phi_bins, corr):
 
 
 
-def roofit_mass(hist_mc, hist_dt, plot=False, fitf='bwxcb', tag=''):
+def roofit_mass(hist_mc, hist_dt, plot=False, fitf='bwxcb', tag='', massrange = [80, 102]):
     ROOT.RooMsgService.instance().setSilentMode(True)
     ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
 
@@ -419,7 +423,7 @@ def roofit_mass(hist_mc, hist_dt, plot=False, fitf='bwxcb', tag=''):
     #hist_mc.Sumw2(True)
     #hist_dt.Sumw2(True)
     
-    x = ROOT.RooRealVar("x", "m_vis (GeV)", 80, 102)
+    x = ROOT.RooRealVar("x", "m_vis (GeV)", massrange[0], massrange[1])
     x.setBins(10000,"cache")
     x.setMin("cache",0)
     x.setMax("cache",500)

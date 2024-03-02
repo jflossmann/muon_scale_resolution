@@ -4,9 +4,14 @@ from tqdm import tqdm
 import numpy as np
 import os
 
-pdir = 'plots/scale/'
+syst = ''
+
+tfile4 = '../hists/condor/'+syst+'/{}/step4_k.root'
+tfile13 = '../hists/condor/'+syst+'/{}/'
+
+pdir = 'plots/'+syst+'/'
 os.makedirs(pdir, exist_ok=True)
-hdir = 'hists/scale/'
+hdir = 'hists/'+syst+'/'
 os.makedirs(hdir, exist_ok=True)
 
 ROOT.gROOT.SetBatch(1)
@@ -18,7 +23,7 @@ var_bins = {
     "A_": np.linspace(-5e-4, 5e-4, 10000),
     "k_": np.linspace(.9, 1.4, 1000)
 }
-n_bs_bins = 200
+n_bs_bins = 400
 abseta_bins = np.linspace(0, 2.4, 13)
 
 c = ROOT.TCanvas()
@@ -39,7 +44,7 @@ for dtsg in ["SIG", "DATA"]:
         len(var_bins["k_"])-1, array('d', var_bins["k_"])
     )
     for i in range(n_bs_bins):
-        tf = ROOT.TFile(f'../hists/condor/{i}/step4_k.root', 'read')
+        tf = ROOT.TFile(tfile4.format(i), 'read')
         hist = tf.Get("h_k_"+dtsg)
         hist.SetDirectory(ROOT.nullptr)
         tf.Close()
@@ -104,7 +109,7 @@ def get_stuff(nfiles, fname, hname, eta_bins, phi_bins, var_bins):
         )
 
         for i in range(n_bs_bins):
-            path = f'../hists/condor/{i}/{fname}'
+            path = tfile13.format(i) + fname
             if not os.path.exists(path): continue
 
             tf = ROOT.TFile(path, 'read')
