@@ -9,8 +9,6 @@ from time import time
 # import modules
 import python.ntuple as ntuple
 import python.step1 as step1
-import python.plot as plot
-import python.zmass as zmass
 import python.step2 as step2
 import python.step3 as step3
 import python.step4 as step4
