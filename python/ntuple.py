@@ -5,6 +5,7 @@ import time
 from multiprocessing import Pool, RLock
 from tqdm import tqdm
 import os
+import json
 
 # function in c++ code. Finds indices of muons closest to z boson mass
 ROOT.gInterpreter.Declare("""
@@ -14,7 +15,7 @@ ROOT.gInterpreter.Declare("""
         ROOT::VecOps::RVec<Float_t> *Muon_eta,
         ROOT::VecOps::RVec<Float_t> *Muon_phi,
         ROOT::VecOps::RVec<Float_t> *Muon_mass,
-        ROOT::VecOps::RVec<Float_t> *Muon_tkRelIso,
+        ROOT::VecOps::RVec<UChar_t> *Muon_pfIsoId,
         ROOT::VecOps::RVec<Bool_t> *Muon_mediumId,
         ROOT::VecOps::RVec<Int_t> *Muon_charge
         ){
@@ -25,15 +26,15 @@ ROOT.gInterpreter.Declare("""
         for(int i=0; i<nMuon; i++){
             if (Muon_pt->at(i) < 10) continue;
             if(fabs(Muon_eta->at(i) > 2.4)) continue;
-            if(Muon_tkRelIso->at(i) > 0.1) continue;
-            if(Muon_mediumId->at(i)==0) continue;
+            if(Muon_pfIsoId->at(i) < 2) continue;
+            if(Muon_mediumId->at(i) == 0) continue;
 
             for(int j=i; j<nMuon; j++){
                 if (Muon_pt->at(j) < 10) continue;
                 if (Muon_pt->at(i) < 25 && Muon_pt->at(j) < 25) continue;
                 if(fabs(Muon_eta->at(j) > 2.4)) continue;
-                if(Muon_tkRelIso->at(j) > 0.1) continue;
-                if(Muon_mediumId->at(j)==0) continue;
+                if(Muon_pfIsoId->at(j) < 2) continue;
+                if(Muon_mediumId->at(j) == 0) continue;
                 if(Muon_charge->at(i) * Muon_charge->at(j) > 0) continue;
 
                 TLorentzVector mui, muj, Z;
@@ -83,9 +84,9 @@ ROOT.gInterpreter.Declare(
         Float_t phi,
         Int_t charge,
         ROOT::VecOps::RVec<Int_t> *GenPart_status,
-        ROOT::VecOps::RVec<Int_t> *GenPart_statusFlags,
+        ROOT::VecOps::RVec<UShort_t> *GenPart_statusFlags,
         ROOT::VecOps::RVec<Int_t> *GenPart_pdgId,
-        ROOT::VecOps::RVec<Int_t> *GenPart_genPartIdxMother,
+        ROOT::VecOps::RVec<Short_t> *GenPart_genPartIdxMother,
         ROOT::VecOps::RVec<Float_t> *GenPart_eta,
         ROOT::VecOps::RVec<Float_t> *GenPart_phi
     ){
@@ -125,6 +126,56 @@ ROOT.gInterpreter.Declare(
 """
 )
 
+
+
+ROOT.gInterpreter.Declare(
+"""
+    Int_t is_golden(
+        Int_t luminosityBlock,
+        Int_t run,
+        std::vector<std::vector<std::vector<int>>> glumisecs,
+        std::vector<int> runs
+    ){
+        int index = -1;
+        auto runidx = std::find(runs.begin(), runs.end(), run);
+        if (runidx != runs.end()){
+            index = runidx - runs.begin();
+        }
+
+        if (index == -1) {
+            return 0;
+        }
+
+        int n_glumsecs = glumisecs[index].size();
+        for (int i=0; i<n_glumsecs; i++) {
+            if (luminosityBlock >= glumisecs[index][i][0] && luminosityBlock <= glumisecs[index][i][1]){
+                return 1;
+            }
+        }
+        return 0;
+    }
+"""
+)
+
+def filter_lumi(rdf, golden_json):
+    """
+    function to get rdf with events filtered with golden json
+    
+    (ROOT.RDataFrame) rdf: dataframe
+    (str) golden_json: path to golden json
+    """
+
+    # load content of golden json
+    with open(golden_json) as cf:
+        goldenruns = json.load(cf)
+
+    # extract runs and lumi sections to lists
+    runs = [r for r in goldenruns.keys()]
+    lumlist = [goldenruns[r] for r in goldenruns.keys()]
+
+    # make c++ vectors of runlist and lumilist for dataframe
+    runstr = "{" + ",".join(runs) + "}"
+    lumstr = str(lumlist).replace("[", "{").replace("]", "}")
 
 # function to make z_pt distributions 
 def hist_zpt(ntuples, pt_bins, hdir):
@@ -168,14 +219,17 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
 
     for sf in SFs:
-        ROOT.gROOT.ProcessLine(f'TFile* tf_{sf} = TFile::Open("{SFs[sf][0]}", "read");')
-        ROOT.gROOT.ProcessLine(f'TH2F* h_{sf} = (TH2F*)tf_{sf}->Get("{SFs[sf][1]}");')        
+        with open(SFs[sf][0]) as _file:
+            tmp_dicts = json.load(_file)["corrections"]
+            for tmp_dict in tmp_dicts:
+                if tmp_dict["name"] == SFs[sf][1]:
+                    SFs[sf].append(tmp_dict)
 
     for typ in ntuples:
         for sample in ntuples[typ]:
-            if sample !='SIG' : continue
+            #if sample !='SIG' : continue
             print(sample)
-            sampleyaml = yaml_loader(ntuples[typ][sample].replace('_*.root', '.yaml').replace('ntuples/', ''))
+            sampleyaml = yaml_loader(ntuples[typ][sample].replace('_*.root', '.yaml'))
 
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
             rdf = rdf.Define('sumwWeight', str(sampleyaml['genweight']))
@@ -184,27 +238,45 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
                 rdf = rdf.Define("zPtWeight", "1")
             else:
                 rdf = rdf.Define("zPtWeight", "h_ratio->GetBinContent(h_ratio->FindBin(pt_Z))")
+        
+            for sf in SFs:
+                rdf = rdf.Define(f"sf_{sf}_1", "1")
+                rdf = rdf.Define(f"sf_{sf}_2", "1")
 
-            if typ == 'DATA':
+            if typ != 'DATA':
                 for sf in SFs:
-                    rdf = rdf.Define(f"sf_{sf}_1", "1")
-                    rdf = rdf.Define(f"sf_{sf}_2", "1")
-            else:
-                for sf in SFs:
-                    rdf = rdf.Define(
-                        f"sf_{sf}_1",
-                        f'h_{sf}->GetBinContent(\
-                            h_{sf}->GetXaxis()->FindBin(fabs(eta_1)),\
-                            h_{sf}->GetYaxis()->FindBin(pt_1)\
-                        )'
-                    )
-                    rdf = rdf.Define(
-                        f"sf_{sf}_2",
-                        f'h_{sf}->GetBinContent(\
-                            h_{sf}->GetXaxis()->FindBin(fabs(eta_2)),\
-                            h_{sf}->GetYaxis()->FindBin(pt_2)\
-                        )'
-                    )
+                    etabins = SFs[sf][2]["data"]["edges"]
+                    if SFs[sf][2]["inputs"][0]["name"] != "abseta":
+                        print("The sf does not seem to be binned in abseta. Please adjust.")
+                        break
+
+                    for eta in range(len(etabins)-1):
+                        tmp_dict = SFs[sf][2]["data"]["content"][eta]
+                        ptbins = tmp_dict["edges"]
+
+                        for pt in range(len(ptbins)-1):
+
+                            systs = tmp_dict["content"][pt]["content"]
+                            for syst in systs:
+                                if syst["key"] == 'nominal':
+                                    sf_val = syst["value"]
+
+                            rdf = rdf.Redefine(
+                                f"sf_{sf}_1",
+                                f'double sf;\
+                                if (abs(eta_1) > {etabins[eta]} && abs(eta_1) < {etabins[eta+1]} &&\
+                                pt_1 > {ptbins[pt]} && pt_1 < {ptbins[pt+1]}) sf = {sf_val};\
+                                else sf = sf_{sf}_1;\
+                                return sf;'
+                            )
+                            rdf = rdf.Redefine(
+                                f"sf_{sf}_2",
+                                f'double sf;\
+                                if (abs(eta_2) > {etabins[eta]} && abs(eta_2) < {etabins[eta+1]} &&\
+                                pt_2 > {ptbins[pt]} && pt_2 < {ptbins[pt+1]}) sf = {sf_val};\
+                                else sf = sf_{sf}_2;\
+                                return sf;'
+                            )
             for sf in SFs:
                 rdf = rdf.Define(f"sf_{sf}", f"sf_{sf}_1 * sf_{sf}_2")
 
@@ -215,7 +287,7 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
 
 
 # function which creates ntuple files from nanoaod
-def make_ntuples(nanoAODs, datasets, datadir):
+def make_ntuples(nanoAODs, datasets, datadir, golden_json):
 
     os.makedirs(datadir, exist_ok=True)
 
@@ -223,12 +295,11 @@ def make_ntuples(nanoAODs, datasets, datadir):
     datasets = yaml_loader(datasets)
 
     for sample in nanoAODs:
-
         sum_genweights = 0
 
         start = time.time()
         print(f"Processing {sample} samples. Number of Files: {len(nanoAODs[sample])}")
-        args = [(datasets, sample, _file, number, datadir) for number, _file in enumerate(nanoAODs[sample])]
+        args = [(datasets, sample, _file, number, datadir, golden_json) for number, _file in enumerate(nanoAODs[sample])]
         nthreads = 8
 
         pool = Pool(nthreads, initargs=(RLock,), initializer=tqdm.set_lock)
@@ -258,7 +329,7 @@ def job_wrapper(args):
     return process_ntuples(*args)
 
 
-def process_ntuples(datasets, sample, _file, number, datadir):
+def process_ntuples(datasets, sample, _file, number, datadir, golden_json):
     quants = [
             "pt_Z", "mass_Z", "eta_Z", "phi_Z",
             "pt_1", "mass_1", "eta_1", "phi_1", "charge_1",
@@ -269,7 +340,7 @@ def process_ntuples(datasets, sample, _file, number, datadir):
     # load nanoAOD
     rdf = ROOT.RDataFrame("Events", _file)
 
-    if sample=='DATA':
+    if sample == 'DATA':
         rdf = rdf.Define("genWeight", "1")
 
     genweight = rdf.Sum("genWeight").GetValue()
@@ -283,7 +354,7 @@ def process_ntuples(datasets, sample, _file, number, datadir):
                                 &Muon_eta,
                                 &Muon_phi,
                                 &Muon_mass,
-                                &Muon_tkRelIso,
+                                &Muon_pfIsoId,
                                 &Muon_mediumId,
                                 &Muon_charge
                                 ))""")
@@ -313,6 +384,28 @@ def process_ntuples(datasets, sample, _file, number, datadir):
     rdf = rdf.Define("phi_Z", "p4_Z.Phi()")
     
     rdf = rdf.Filter("mass_Z > 50 && mass_Z < 130")
+
+    if sample=='DATA':
+        # load content of golden json
+        with open(golden_json) as cf:
+            goldenruns = json.load(cf)
+
+        # extract runs and lumi sections to lists
+        runs = [r for r in goldenruns.keys()]
+        lumlist = [goldenruns[r] for r in goldenruns.keys()]
+
+        # make c++ vectors of runlist and lumilist for dataframe
+        runstr = "{" + ",".join(runs) + "}"
+        lumstr = str(lumlist).replace("[", "{").replace("]", "}")
+        # print(runstr, lumstr)
+        rdf = rdf.Define(
+            "golden", 
+            f"Int_t (is_golden(luminosityBlock, run, {lumstr}, {runstr}))"
+        )
+        n_all = rdf.Count().GetValue()
+        rdf = rdf.Filter("golden > 0")
+        n_golden = rdf.Count().GetValue()
+        print(f"Total number of events: {n_all}, golden events: {n_golden}.")
 
     # make output with interesting data
     rdf.Snapshot("Events", f"{datadir+sample}_{number}.root", quants)
