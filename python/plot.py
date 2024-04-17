@@ -9,6 +9,7 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
     c = ROOT.TCanvas("c", title, 900, 800)
     c.Divide(1,2)
     c.cd(1)
+    c.SetLogy(ROOT.kTRUE)
     plotpad = c.GetPad(1)
     plotpad.SetFillStyle(4000)
     plotpad.SetPad(0, 0.21, 1, 1)
@@ -65,7 +66,7 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
     cmsTex.SetTextSize(0.035)
     cmsTex.DrawLatex(0.11,0.915,'#bf{CMS} #it{Preliminary}')
     #cmsTex.DrawLatex(0.745, 0.92, '{} data events'.format(evts))
-    cmsTex.DrawLatex(0.75, 0.915, '(2018, 13 TeV)')
+    cmsTex.DrawLatex(0.73, 0.915, '(2022, 13.6 TeV)')
     
     #cmsTex.DrawLatex(0.7, 0.85, 'A-D = {}'.format(test_ad))
     cmsTex.DrawLatex(0.68, 0.86, text[0])
@@ -74,7 +75,6 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
     cmsTex.DrawLatex(0.69, 0.65, 'chi2/NDF = {}'.format(round(test_chi2_dt,2)))
     cmsTex.DrawLatex(0.69, 0.62, '#color[{}]{{chi2/NDF = {}}}'.format(ROOT.kBlue, round(test_chi2_gen,2)))
     #cmsTex.DrawLatex(0.7, 0.75, 'K-S = {}'.format(test_ks))
-    #pad1.SetLogy(1)
     c.cd(2)
     ratiopad = c.GetPad(2)
     ratiopad.SetPad(0, 0, 1, 0.31)
@@ -181,7 +181,7 @@ def plot_ratio2(hists, title, outfile, text=['','',''], xrange=None, ratio_range
     cmsTex.SetTextSize(0.035)
     cmsTex.DrawLatex(0.15,0.915,'#bf{CMS} #it{Preliminary}')
     #cmsTex.DrawLatex(0.745, 0.92, '{} data events'.format(evts))
-    cmsTex.DrawLatex(0.75, 0.915, '(2018, 13 TeV)')
+    cmsTex.DrawLatex(0.73, 0.915, '(2022, 13.6 TeV)')
     
     #cmsTex.DrawLatex(0.7, 0.85, 'A-D = {}'.format(test_ad))
     cmsTex.DrawLatex(0.68, 0.86, text[0])
@@ -414,6 +414,9 @@ def roofit_mass(hist_mc, hist_dt, plot=False, fitf='bwxcb', tag='', massrange = 
     ROOT.RooMsgService.instance().setSilentMode(True)
     ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
 
+    hist_mc.GetXaxis().SetRangeUser(massrange[0], massrange[1])
+    hist_dt.GetXaxis().SetRangeUser(massrange[0], massrange[1])
+
     results, errors, plots = {}, {}, {}
     if not hist_dt:
         if 'mc' in tag:
@@ -496,5 +499,115 @@ def roofit_mass(hist_mc, hist_dt, plot=False, fitf='bwxcb', tag='', massrange = 
         c1.Update()
         c1.SaveAs("{}.png".format(plot))
         c1.SaveAs("{}.pdf".format(plot))
+    
+    return results, errors
+
+
+
+
+
+def roofit_masscb(hist_mc, hist_dt, plot=False, fitf='bwxcb', tag='', massrange = [80, 102]):
+    ROOT.RooMsgService.instance().setSilentMode(True)
+    ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
+
+    hist_mc.GetXaxis().SetRangeUser(massrange[0], massrange[1])
+    hist_dt.GetXaxis().SetRangeUser(massrange[0], massrange[1])
+
+    results, errors, plots = {}, {}, {}
+    if not hist_dt:
+        if 'mc' in tag:
+            hist_mc.Scale(1000) # scaled to fb
+    else:
+        hist_mc.Scale(hist_dt.Integral()/hist_mc.Integral())
+    #hist_mc.Sumw2(True)
+    #hist_dt.Sumw2(True)
+    
+    x = ROOT.RooRealVar("x", "m_vis (GeV)", massrange[0], massrange[1])
+    x.setBins(10000,"cache")
+    x.setMin("cache",0)
+    x.setMax("cache",500)
+
+    if plot:
+        c1 = ROOT.TCanvas( 'c1', 'The Fit Canvas', 200, 10, 700, 500 )
+        c1.SetGridx()
+        c1.SetGridy()
+        c1.GetFrame().SetFillColor( 21 )
+        c1.GetFrame().SetBorderMode(-1 )
+        c1.GetFrame().SetBorderSize( 5 )
+        frame = x.frame()
+        frame.SetTitle('')
+    
+    roohist_mc = ROOT.RooDataHist('roomc', 'mc hist', ROOT.RooArgSet(x), hist_mc)
+
+    Z_mass = ROOT.RooRealVar("Z_mass", "Z_mass", 91.1876, 60, 120)
+    Z_width = ROOT.RooRealVar("Z_width", "Z_widthan", 2.4952, 0, 10)
+    Z_mass.setConstant(True)
+    Z_width.setConstant(True)
+    mean = ROOT.RooRealVar("mean", "mean", 0, -1, 1)
+    #cb_mean.setConstant(True)
+    sigma = ROOT.RooRealVar("sigma", "sigma", 1., 0, 3)
+    n_sigma = 1 # since sigma_total = sigma_left + sigma_right
+    n_L = ROOT.RooRealVar("n_L", "n_L", 5, 0, 1000)
+    n_R = ROOT.RooRealVar("n_R", "n_R", 5, 0, 1000)
+    alpha_L = ROOT.RooRealVar("alpha_L", "alpha_L", 2, 1.8, 10)
+    alpha_R = ROOT.RooRealVar("alpha_R", "alpha_R", 2.5, 2, 10)
+    #alpha_L.setConstant(True)
+    #alpha_R.setConstant(True)
+
+    bw = ROOT.RooBreitWigner("bw", "BreitWigner", x, Z_mass, Z_width)
+    cb = ROOT.RooCrystalBall("cb", "CrystalBall", x, mean, sigma,
+                            sigma, alpha_L, n_L, alpha_R, n_R)
+
+    func = ROOT.RooFFTConvPdf("func", "func", x, bw, cb)
+
+    roohist_dt = ROOT.RooDataHist('dt', 'dt', ROOT.RooArgSet(x), hist_dt)
+
+    #print("="*50)
+    fitResult = func.fitTo(roohist_dt)#, ROOT.RooFit.AsymptoticError(True), ROOT.RooFit.PrintEvalErrors(-1))
+    #ws.Import(func)
+
+    if plot:
+        roohist_mc.plotOn(frame, ROOT.RooFit.DrawOption("B"), ROOT.RooFit.FillStyle(0), ROOT.RooFit.FillColor(ROOT.kBlue))
+        func.plotOn(frame, ROOT.RooFit.LineColor(ROOT.kRed))
+        #chi2 = frame.chiSquare(6)
+
+        roohist_dt.plotOn(frame, ROOT.RooFit.MarkerColor(ROOT.kBlack))
+        #func.plotOn(frame, ROOT.RooFit.LineColor(ROOT.kBlack))
+        chi2 = frame.chiSquare(6) 
+
+        # print(d)
+        results = [mean.getVal(), sigma.getVal(), n_L.getVal(), n_R.getVal(), alpha_L.getVal(), alpha_R.getVal()]
+        errors = [mean.getAsymErrorHi(), sigma.getAsymErrorHi()]
+        #errors[d] = [Z_mass.getAsymErrorLo(), sigma.getAsymErrorLo()]
+
+    if plot:
+        frame.Draw()
+        c1.Update()
+        ROOT.gStyle.SetGridColor(ROOT.kGray+1)
+
+        cmsTex=ROOT.TLatex()
+        cmsTex.SetTextFont(42)
+        cmsTex.SetTextSize(0.025)
+        cmsTex.SetNDC()
+        #if CMSONLY:
+        cmsTex.SetTextSize(0.035)
+        cmsTex.DrawLatex(0.1,0.92,'#bf{CMS} #it{Preliminary}')
+
+        cmsTex.SetTextSize(0.025)
+        cmsTex.SetLineWidth(2)
+        cmsTex.SetTextFont(42)
+        i=0
+        stats = ROOT.TPaveText(0.65, 0.65, 0.88, 0.88, "br ARC NDC")
+        stats.AddText("M(Z) = {} ({})".format(round(results[0],3), round(errors[0],3)))
+        stats.AddText("res(M) = {} ({})".format(round(results[1],3), round(errors[1],3)))
+        stats.AddText("chi2/dof = {}".format(round(results[2],2)))
+
+        stats.Draw("SAME")
+        c1.Update()
+        c1.SaveAs("{}.png".format(plot))
+        c1.SaveAs("{}.pdf".format(plot))
+        c1.Delete()
+    
+    print(results)
     
     return results, errors

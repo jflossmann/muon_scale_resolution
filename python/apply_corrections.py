@@ -56,6 +56,42 @@ def step1(rdf, hdir, typ):
     return rdf
 
 
+ROOT.gInterpreter.Declare("""
+    double crystalBall(double *x, double *par) {
+        double alpha = par[0];
+        double n = par[1];
+        double mean = par[2];
+        double sigma = par[3];
+
+        double t = (x[0] - mean) / sigma;
+        if (alpha < 0) t = -t;
+        double abs_alpha = TMath::Abs(alpha);
+        double A = TMath::Power(n / abs_alpha, n) * TMath::Exp(-0.5 * abs_alpha * abs_alpha);
+        double B = n / abs_alpha - abs_alpha;
+        double C = n / abs_alpha / (n - 1) * TMath::Exp(-0.5 * abs_alpha * abs_alpha);
+        double D = TMath::Sqrt(TMath::PiOver2()) * (1 + TMath::Erf(abs_alpha / TMath::Sqrt(2)));
+        double N = 1.0 / (sigma * (C + D));
+
+        if (t > -alpha) return N * TMath::Exp(-0.5 * t * t);
+        else return N * A * TMath::Power(B - t, -n);
+    }
+""")
+
+
+
+ROOT.gInterpreter.Declare("""
+    float smear_cb(double mean, double sigma, double alpha, double n){
+        TRandom3 rnd(0);
+
+        // Create a TF1 object representing the Crystal Ball function
+        TF1 *fCrystalBall = new TF1("fCrystalBall", crystalBall, -10, 10, 4);
+        fCrystalBall->SetParameters(alpha, n, mean, sigma);
+        float rndm = fCrystalBall->GetRandom();
+        return rndm;
+        }
+""")
+
+
 
 def step2(df, hdir, typ):
     if typ == 'GEN':
@@ -79,14 +115,16 @@ def step2(df, hdir, typ):
             'double pt1;\
             Int_t etabin1 = h_results_cb->GetXaxis()->FindBin(abs(eta_1));\
             Int_t nlbin1 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_1);\
+            double mean_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 1);\
             double sig_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 2);\
+            double n_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 3);\
+            double alpha_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 4);\
             double sig_poly1_a = h_results_poly->GetBinContent(etabin1, nlbin1, 1);\
             double sig_poly1_b = h_results_poly->GetBinContent(etabin1, nlbin1, 2);\
             double sig_poly1_c = h_results_poly->GetBinContent(etabin1, nlbin1, 3);\
             double sig_poly1 = sig_poly1_a + sig_poly1_b * genpt_1 + sig_poly1_c * genpt_1*genpt_1;\
-            double sig1 = sig_cb1 * sig_poly1;\
-            if (sig1 < 0) sig1 = 0;\
-            pt1 = genpt_1 * ( 1 + sig1 * (float)(gaus()));\
+            if (sig_poly1 < 0) sig_poly1 = 0;\
+            pt1 = 1. / (1./genpt_1 * ( 1 + sig_poly1 * sig_cb1 * (float)(gaus())));\
             return pt1;'
         )
 
@@ -95,14 +133,16 @@ def step2(df, hdir, typ):
             "double pt2;\
             Int_t etabin2 = h_results_cb->GetXaxis()->FindBin(abs(eta_2));\
             Int_t nlbin2 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_2);\
+            double mean_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 1);\
             double sig_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 2);\
+            double n_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 3);\
+            double alpha_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 4);\
             double sig_poly2_a = h_results_poly->GetBinContent(etabin2, nlbin2, 1);\
             double sig_poly2_b = h_results_poly->GetBinContent(etabin2, nlbin2, 2);\
             double sig_poly2_c = h_results_poly->GetBinContent(etabin2, nlbin2, 3);\
             double sig_poly2 = sig_poly2_a + sig_poly2_b * genpt_2 + sig_poly2_c * genpt_2*genpt_2;\
-            double sig2 = sig_cb2 * sig_poly2;\
-            if (sig2 < 0) sig2 = 0;\
-            pt2 = genpt_2 * ( 1 + sig2 * (float)(gaus()));\
+            if (sig_poly2 < 0) sig_poly2 = 0;\
+            pt2 = 1. / (1./genpt_2 * ( 1 + sig_poly2 * sig_cb2 * (float)(gaus())));\
             return pt2;"
         )
 
@@ -156,11 +196,11 @@ def step4(df, hdir, typ):
 
             df = df.Define(
                 f"genpt_1_smeared_{dtsg}", 
-                f"genpt_1 * (1 + h_k_{dtsg}->GetBinContent(h_k_{dtsg}->FindBin(abs(eta_1))) * (genpt_1_smeared/genpt_1 - 1))"
+                f"1. / (1./genpt_1 * (1 + h_k_{dtsg}->GetBinContent(h_k_{dtsg}->FindBin(abs(eta_1))) * (genpt_1_smeared/genpt_1 - 1)))"
             )
             df = df.Define(
                 f"genpt_2_smeared_{dtsg}", 
-                f"genpt_2 * (1 + h_k_{dtsg}->GetBinContent(h_k_{dtsg}->FindBin(abs(eta_2))) * (genpt_2_smeared/genpt_2 - 1))"
+                f"1. / (1./genpt_2 * (1 + h_k_{dtsg}->GetBinContent(h_k_{dtsg}->FindBin(abs(eta_2))) * (genpt_2_smeared/genpt_2 - 1)))"
             )
             df = df.Define(
                 f"genmass_Z_smeared_{dtsg}",
@@ -173,7 +213,7 @@ def step4(df, hdir, typ):
             f"double pt; \
             double k_sig = h_k_SIG->GetBinContent(h_k_SIG->FindBin(abs(eta_1))); \
             double k_data = h_k_DATA->GetBinContent(h_k_DATA->FindBin(abs(eta_1))); \
-            pt = pt_1_roccor_it * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_1_smeared/genpt_1 -1)); \
+            pt = 1. / (1./pt_1_roccor_it * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_1_smeared/genpt_1 -1))); \
             return pt;"
         )
         df = df.Define(
@@ -181,7 +221,7 @@ def step4(df, hdir, typ):
             f"double pt; \
             double k_sig = h_k_SIG->GetBinContent(h_k_SIG->FindBin(abs(eta_2))); \
             double k_data = h_k_DATA->GetBinContent(h_k_DATA->FindBin(abs(eta_2))); \
-            pt = pt_2_roccor_it * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_2_smeared/genpt_2 -1)); \
+            pt = 1. / (1./pt_2_roccor_it * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_2_smeared/genpt_2 -1))); \
             return pt;"
         )
         df = df.Define(

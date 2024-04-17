@@ -4,7 +4,7 @@ import json
 import os
 import ROOT
 from array import array
-from python.plot import roofit_mass, plot_ratio, plot_ratio2
+from python.plot import roofit_mass, roofit_masscb, plot_ratio, plot_ratio2
 from python.apply_corrections import step1, step2, step3, step4
 
 
@@ -94,7 +94,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir, weight):
                 )
                 h_mass_reco_2 = df_reco.Histo2D(
                     (
-                        'h_mass_reco_1', '',
+                        'h_mass_reco_2', '',
                         len(abseta_bins)-1, array('d', abseta_bins),
                         len(m_bins)-1, array('d', m_bins)
                     ),
@@ -160,7 +160,11 @@ def perform_fits(samples, abseta_bins, hdir, pdir, m_bins):
                     print(h_gen, h_gen_smeared, h_reco)
 
                     results_gen, errors_gen = roofit_mass(h_gen, h_gen_smeared, plot=f'{pdir}template_fits/gensmeared_{eta}', fitf='template', tag='', massrange=massrange)
-                    results_reco, errors_reco = roofit_mass(h_gen, h_reco, plot=f'{pdir}template_fits/{typ}_{eta}', fitf='template', tag='', massrange=massrange)
+                    # results_reco, errors_reco = roofit_mass(h_gen, h_reco, plot=f'{pdir}template_fits/{typ}_{eta}', fitf='template', tag='', massrange=massrange)
+
+                    # results_gen, errors_gen = roofit_masscb(h_gen, h_gen_smeared, plot=f'{pdir}template_fits/gensmeared_{eta}', fitf='template', tag='', massrange=massrange)
+                    results_reco, errors_reco = roofit_masscb(h_gen, h_reco, plot=f'{pdir}template_fits/{typ}_{eta}', fitf='template', tag='', massrange=massrange)
+
 
                     hists[-1].SetBinContent(eta+1, results_reco[1]/results_gen[1])
 
@@ -239,7 +243,7 @@ def plot_closure(samples, hdir, pdir, weight, m_bins):
         outfile=f'{pdir}Z_mass_comparison_SIG',
         text=['','',''],
         #xrange=[80, 102],
-        ratio_range = [0.85, 1.15],
+        ratio_range = [0.95, 1.05],
         labels={
             'gen': 'smeared genmass',
             'mc': 'reconstructed Mass',
@@ -284,7 +288,7 @@ def plot_closure(samples, hdir, pdir, weight, m_bins):
         outfile=f'{pdir}Z_mass_comparison_DATA',
         text=['','',''],
         #xrange=[80, 102],
-        ratio_range = [0.85, 1.15],
+        ratio_range = [0.95, 1.05],
         labels={
             'gen': 'presmeared genmass',
             'mc': 'smeared genmass',
@@ -312,7 +316,7 @@ def plot_closure(samples, hdir, pdir, weight, m_bins):
         outfile=f'{pdir}Z_mass_comparison_SIG_DATA',
         text=['','',''],
         #xrange=[80, 102],
-        ratio_range = [0.85, 1.15],
+        ratio_range = [0.95, 1.05],
         labels={
             'gen': 'presmeared genmass',
             'mc': 'smeared reco Mass',
