@@ -37,5 +37,5 @@ docker_image = mschnepf/slc7-condocker
 ## Copy local variables to job
 getenv = True
 
-numJobs = 96
+numJobs = 400
 queue $(numJobs)
