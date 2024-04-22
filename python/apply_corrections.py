@@ -56,40 +56,95 @@ def step1(rdf, hdir, typ):
     return rdf
 
 
-ROOT.gInterpreter.Declare("""
-    double crystalBall(double *x, double *par) {
-        double alpha = par[0];
-        double n = par[1];
-        double mean = par[2];
-        double sigma = par[3];
 
-        double t = (x[0] - mean) / sigma;
-        if (alpha < 0) t = -t;
-        double abs_alpha = TMath::Abs(alpha);
-        double A = TMath::Power(n / abs_alpha, n) * TMath::Exp(-0.5 * abs_alpha * abs_alpha);
-        double B = n / abs_alpha - abs_alpha;
-        double C = n / abs_alpha / (n - 1) * TMath::Exp(-0.5 * abs_alpha * abs_alpha);
-        double D = TMath::Sqrt(TMath::PiOver2()) * (1 + TMath::Erf(abs_alpha / TMath::Sqrt(2)));
-        double N = 1.0 / (sigma * (C + D));
-
-        if (t > -alpha) return N * TMath::Exp(-0.5 * t * t);
-        else return N * A * TMath::Power(B - t, -n);
+ROOT.gInterpreter.Declare(
+    """
+    #include <boost/math/special_functions/erf.hpp>
+    struct CrystalBall{
+        double pi=3.14159;
+        double sqrtPiOver2=sqrt(pi/2.0);
+        double sqrt2=sqrt(2.0);
+        double m;
+        double s;
+        double a;
+        double n;
+        double B;
+        double C;
+        double D;
+        double N;
+        double NA;
+        double Ns;
+        double NC;
+        double F;
+        double G;
+        double k;
+        double cdfMa;
+        double cdfPa;
+    CrystalBall():m(0),s(1),a(10),n(10){
+        init();
     }
-""")
+    CrystalBall(double mean, double sigma, double alpha, double n)
+        :m(mean),s(sigma),a(alpha),n(n){
+        init();
+    }
+    void init(){
+        double fa = fabs(a);
+        double ex = exp(-fa*fa/2);
+        double A  = pow(n/fa, n) * ex;
+        double C1 = n/fa/(n-1) * ex; 
+        double D1 = 2 * sqrtPiOver2 * erf(fa/sqrt2);
+        B = n/fa-fa;
+        C = (D1+2*C1)/C1;   
+        D = (D1+2*C1)/2;   
+        N = 1.0/s/(D1+2*C1); 
+        k = 1.0/(n-1);  
+        NA = N*A;       
+        Ns = N*s;       
+        NC = Ns*C1;     
+        F = 1-fa*fa/n; 
+        G = s*n/fa;    
+        cdfMa = cdf(m-a*s);
+        cdfPa = cdf(m+a*s);
+    }
+    double pdf(double x) const{ 
+    double d=(x-m)/s;
+        if(d<-a) return NA*pow(B-d, -n);
+        if(d>a) return NA*pow(B+d, -n);
+        return N*exp(-d*d/2);
+    }
+    double pdf(double x, double ks, double dm) const{ 
+        double d=(x-m-dm)/(s*ks);
+        if(d<-a) return NA/ks*pow(B-d, -n);
+        if(d>a) return NA/ks*pow(B+d, -n);
+        return N/ks*exp(-d*d/2);
 
+    }
+    double cdf(double x) const{
+        double d = (x-m)/s;
+        if(d<-a) return NC / pow(F-s*d/G, n-1);
+        if(d>a) return NC * (C - pow(F+s*d/G, 1-n) );
+        return Ns * (D - sqrtPiOver2 * erf(-d/sqrt2));
+    }
+    double invcdf(double u) const{
+        if(u<cdfMa) return m + G*(F - pow(NC/u, k));
+        if(u>cdfPa) return m - G*(F - pow(C-u/NC, -k) );
+        return m - sqrt2 * s * boost::math::erf_inv((D - u/Ns )/sqrtPiOver2);
+    }
+    };
+    """
+)
 
-
-ROOT.gInterpreter.Declare("""
-    float smear_cb(double mean, double sigma, double alpha, double n){
-        TRandom3 rnd(0);
-
-        // Create a TF1 object representing the Crystal Ball function
-        TF1 *fCrystalBall = new TF1("fCrystalBall", crystalBall, -10, 10, 4);
-        fCrystalBall->SetParameters(alpha, n, mean, sigma);
-        float rndm = fCrystalBall->GetRandom();
-        return rndm;
-        }
-""")
+ROOT.gInterpreter.Declare(
+    """
+    double cb_rndm(double mean, double sigma, double alpha, double n) {
+        CrystalBall cb(mean, sigma, alpha, n);
+        TRandom3 rnd(time(0));
+        double rndm = gRandom->Rndm();
+        //cout<< rndm << "  " << cb.invcdf(rndm) << std::endl;
+        return cb.invcdf(rndm);
+    }
+    """
+)
 
 
 
@@ -119,12 +174,13 @@ def step2(df, hdir, typ):
             double sig_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 2);\
             double n_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 3);\
             double alpha_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 4);\
+            double rndm_cb1 = (double) cb_rndm(mean_cb1, sig_cb1, alpha_cb1, n_cb1);\
             double sig_poly1_a = h_results_poly->GetBinContent(etabin1, nlbin1, 1);\
             double sig_poly1_b = h_results_poly->GetBinContent(etabin1, nlbin1, 2);\
             double sig_poly1_c = h_results_poly->GetBinContent(etabin1, nlbin1, 3);\
             double sig_poly1 = sig_poly1_a + sig_poly1_b * genpt_1 + sig_poly1_c * genpt_1*genpt_1;\
             if (sig_poly1 < 0) sig_poly1 = 0;\
-            pt1 = 1. / (1./genpt_1 * ( 1 + sig_poly1 * sig_cb1 * (float)(gaus())));\
+            pt1 = 1. / (1./genpt_1 * ( 1 + sig_poly1 * rndm_cb1));\
             return pt1;'
         )
 
@@ -137,12 +193,13 @@ def step2(df, hdir, typ):
             double sig_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 2);\
             double n_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 3);\
             double alpha_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 4);\
+            double rndm_cb2 = (double) cb_rndm(mean_cb2, sig_cb2, alpha_cb2, n_cb2);\
             double sig_poly2_a = h_results_poly->GetBinContent(etabin2, nlbin2, 1);\
             double sig_poly2_b = h_results_poly->GetBinContent(etabin2, nlbin2, 2);\
             double sig_poly2_c = h_results_poly->GetBinContent(etabin2, nlbin2, 3);\
             double sig_poly2 = sig_poly2_a + sig_poly2_b * genpt_2 + sig_poly2_c * genpt_2*genpt_2;\
             if (sig_poly2 < 0) sig_poly2 = 0;\
-            pt2 = 1. / (1./genpt_2 * ( 1 + sig_poly2 * sig_cb2 * (float)(gaus())));\
+            pt2 = 1. / (1./genpt_2 * ( 1 + sig_poly2 * rndm_cb2));\
             return pt2;"
         )
 
