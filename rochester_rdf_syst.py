@@ -76,6 +76,21 @@ def parse_args():
         help="Evaluate systematic. Only one at a time!"
     )
 
+    parser.add_argument(
+        '-Y',
+        '--year',
+        type=str,
+        default='',
+        help='specific run'
+    )
+    parser.add_argument(
+        '-P',
+        '--plot',
+        default=False,
+        action='store_true',
+        help='Save plots'
+    )
+
     args = parser.parse_args()
     return args
 
@@ -86,22 +101,28 @@ if __name__=='__main__':
 
     args = parse_args()
 
+    year = args.year
+
     # adjustable paths
-    datadir = '/ceph/jdriesch/rochester/'
+    datadir = f'/ceph/jdriesch/rochester/{year}/'
+
+    postEE = ''
+    if year in ['2022E', '2022F', '2022G']:
+        postEE = '_EE'
 
     # definition of paths
-    nanoAODs = 'data/nanoAODs.yaml'
-    datasets = 'data/datasets.yaml'
-    sf_path = 'data/scaleFactors/Run2/UL/2018/2018_Z/'\
-        'Efficiencies_muon_generalTracks_Z_Run2018_UL_'
+    nanoAODs = f'data/{year}/nanoAODs.yaml'
+    datasets = f'data/{year}/datasets.yaml'
+    sf_path = f'data/scaleFactors/Run3/2022{postEE}/2022_Z/'\
+        f'ScaleFactors_Muon_Z_ID_ISO_2022{postEE}_schemaV2.json'
     SFs = {
         'id': [
-            sf_path+'ID.root',
-            'NUM_MediumID_DEN_TrackerMuons_abseta_pt'
+            sf_path,
+            'NUM_MediumID_DEN_TrackerMuons'
         ],
         'iso': [
-            sf_path+'ISO.root',
-            'NUM_TightRelIso_DEN_MediumID_abseta_pt'
+            sf_path,
+            'NUM_LoosePFIso_DEN_MediumID'
         ]
     }
     
@@ -129,8 +150,10 @@ if __name__=='__main__':
         'GEN': {'GEN': f"{datadir}GEN_zPt.root"}
     }
 
-    hdir = 'hists/'
-    pdir = 'plots/'
+    hdir = f'hists/{year}/'
+    pdir = f'plots/{year}/'
+
+    golden_json = 'data/jsons/Run3_2022_2023_Golden.json'
 
     # bin defintion
     pt_bins = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
@@ -148,6 +171,7 @@ if __name__=='__main__':
     mass_bins = np.linspace(75, 105, 61)
     m_bins_3 = np.linspace(86, 96, 100)
     m_bins_4 = np.linspace(80, 102, 44)
+    m_bins_4 = np.linspace(85, 97, 44)
 
     nl_bins=[6.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 17.5]
 
@@ -159,6 +183,7 @@ if __name__=='__main__':
     if args.process == -1 and args.syst=='':
         # this is the nominal case
         print("Nominal case.")
+        # ROOT.EnableImplicitMT(5)
 
     elif '1' in args.syst and args.process > -1:
         oneOverPt_bins = np.linspace(
@@ -205,7 +230,7 @@ if __name__=='__main__':
 
  
     if args.ntuples:
-        ntuple.make_ntuples(nanoAODs, datasets, datadir)
+        ntuple.make_ntuples(nanoAODs, datasets, datadir+'ntuples/', golden_json)
         ntuple.hist_zpt(ntuples_raw, pt_bins, hdir)
         ntuple.weight_zpt(ntuples_raw, hdir, eta_bins, phi_bins, SFs)
 
@@ -215,16 +240,19 @@ if __name__=='__main__':
 
     if args.resolution:
         step2.get_res_correction(ntuples["GEN"]["GEN"], pull_bins, r_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, True, weight)
-        step2.plot_closure(ntuples["GEN"]["GEN"], hdir, pdir, weight)
+        if args.plot:
+            step2.plot_closure(ntuples["GEN"]["GEN"], hdir, pdir, weight)
 
     if args.iterative:
-        itsteps = 15
+        itsteps = 25
         step3.iterative_correction(samples=ntuples, eta_bins=eta_bins, phi_bins=phi_bins, mass_bins=m_bins_3, hdir=hdir, pdir=pdir, iterationsteps=itsteps, weight=weight)
-        step3.plot_closure(samples=ntuples, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=itsteps)
+        if args.plot:
+            step3.plot_closure(samples=ntuples, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=itsteps)
 
     if args.residual:
         step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight)
         step4.perform_fits(ntuples, abseta_bins, hdir, pdir, m_bins_4)
-        step4.plot_closure(ntuples, hdir, pdir, weight, m_bins_4)
+        if args.plot:
+            step4.plot_closure(ntuples, hdir, pdir, weight, m_bins_4)
 
     print(f"Done in {round(time()-t0, 1)}s.")
