@@ -1,0 +1,54 @@
+"DATA":
+  "names":
+    - /Muon/Run2022D-22Sep2023-v1/NANOAOD
+  "gjson":
+    update
+  "type":
+    data
+  "xsec":
+    1.0
+"DY":
+  "names":
+    - /ceph/jdriesch/rochester/privateNanosRun22/DY_*.root
+  "gjson":
+    dummy
+  "type":
+    mc
+  "xsec":
+    6244.8
+"WW":
+  "names":
+    - /WW_TuneCP5_13p6TeV_pythia8/Run3Summer22NanoAODv12-130X_mcRun3_2022_realistic_v5-v2/NANOAODSIM
+  "gjson":
+    dummy
+  "type":
+    mc
+  "xsec":
+    116.8
+"WZ":
+  "names":
+    - /WZ_TuneCP5_13p6TeV_pythia8/Run3Summer22NanoAODv12-130X_mcRun3_2022_realistic_v5-v2/NANOAODSIM
+  "gjson":
+    dummy
+  "type":
+    mc
+  "xsec":
+    54.3
+"ZZ":
+  "names":
+    - /ZZ_TuneCP5_13p6TeV_pythia8/Run3Summer22NanoAODv12-130X_mcRun3_2022_realistic_v5-v2/NANOAODSIM
+  "gjson":
+    dummy
+  "type":
+    mc
+  "xsec":
+    16.7
+"TT":
+  "names":
+    - /TT_TuneCP5_13p6TeV_powheg-pythia8/Run3Summer22NanoAODv12-130X_mcRun3_2022_realistic_v5-v2/NANOAODSIM
+  "gjson":
+    dummy
+  "type":
+    mc
+  "xsec":
+    921.0
