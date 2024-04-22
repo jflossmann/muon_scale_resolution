@@ -1,7 +1,7 @@
 ## Executable that will be run in job (has to be executable)
 executable = ./job.sh
 
-arguments = $(Process)
+arguments = $(Process) 2022F
 
 ## Output/Error/Log files
 Output = condor_jobs/job_$(Cluster)_$(Process).out
