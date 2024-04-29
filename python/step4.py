@@ -108,7 +108,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir, weight):
                 for eta in range(len(abseta_bins)-1):
 
                     h_gen_1 = h_gen_mass_1.ProjectionY('h_gen_1', eta+1, eta+1)
-                    h_gen_2 = h_gen_mass_1.ProjectionY('h_gen_2', eta+1, eta+1)
+                    h_gen_2 = h_gen_mass_2.ProjectionY('h_gen_2', eta+1, eta+1)
                     h_gen = h_gen_1.Clone(f'h_gen_eta_{eta}')
                     h_gen.Add(h_gen_2)
                     h_gen.Scale(1./h_gen.Integral())
@@ -131,7 +131,7 @@ def residual_correction(samples, abseta_bins, hdir, pdir, weight):
                 tf.Close()
 
 
-def perform_fits(samples, abseta_bins, hdir, pdir, m_bins):
+def perform_fits(samples, abseta_bins, hdir, pdir, m_bins, doplot):
 
     massrange = [m_bins[0], m_bins[-1]]
 
@@ -159,11 +159,18 @@ def perform_fits(samples, abseta_bins, hdir, pdir, m_bins):
 
                     print(h_gen, h_gen_smeared, h_reco)
 
-                    results_gen, errors_gen = roofit_mass(h_gen, h_gen_smeared, plot=f'{pdir}template_fits/gensmeared_{eta}', fitf='template', tag='', massrange=massrange)
-                    # results_reco, errors_reco = roofit_mass(h_gen, h_reco, plot=f'{pdir}template_fits/{typ}_{eta}', fitf='template', tag='', massrange=massrange)
+                    if doplot:
+                        genplot = f'{pdir}template_fits/gensmeared_{eta}'
+                        recoplot = f'{pdir}template_fits/{typ}_{eta}'
+                    else:
+                        genplot=False
+                        recoplot=False
 
-                    # results_gen, errors_gen = roofit_masscb(h_gen, h_gen_smeared, plot=f'{pdir}template_fits/gensmeared_{eta}', fitf='template', tag='', massrange=massrange)
-                    results_reco, errors_reco = roofit_masscb(h_gen, h_reco, plot=f'{pdir}template_fits/{typ}_{eta}', fitf='template', tag='', massrange=massrange)
+                    results_gen, errors_gen = roofit_mass(h_gen, h_gen_smeared, plot=genplot, fitf='template', tag='', massrange=massrange)
+                    # results_reco, errors_reco = roofit_mass(h_gen, h_reco, plot=recoplot, fitf='template', tag='', massrange=massrange)
+
+                    # results_gen, errors_gen = roofit_masscb(h_gen, h_gen_smeared, plot=genplot, fitf='template', tag='', massrange=massrange)
+                    results_reco, errors_reco = roofit_masscb(h_gen, h_reco, plot=recoplot, fitf='template', tag='', massrange=massrange)
 
 
                     hists[-1].SetBinContent(eta+1, results_reco[1]/results_gen[1])
