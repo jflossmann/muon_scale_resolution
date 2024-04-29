@@ -44,14 +44,14 @@ def step1(rdf, hdir, typ):
         "A_2",
         f"A_{typ}->GetBinContent(A_{typ}->FindBin(eta_2, phi_2))"
     )
-    rdf = rdf.Define(f"pt_1_roccor", f"1./(1./pt_1 * M_1 + charge_1 * A_1)")
-    rdf = rdf.Define(f"pt_2_roccor", f"1./(1./pt_2 * M_2 + charge_2 * A_2)")
+    rdf = rdf.Define(f"pt_1_step1", f"1./(1./pt_1 * M_1 + charge_1 * A_1)")
+    rdf = rdf.Define(f"pt_2_step1", f"1./(1./pt_2 * M_2 + charge_2 * A_2)")
 
     #calculate corrected 4-momenta and corrected Z-mass
-    rdf = rdf.Define(f"p4_1", f"ROOT::Math::PtEtaPhiMVector(pt_1_roccor, eta_1, phi_1, mass_1)")
-    rdf = rdf.Define(f"p4_2", f"ROOT::Math::PtEtaPhiMVector(pt_2_roccor, eta_2, phi_2, mass_2)")
+    rdf = rdf.Define(f"p4_1", f"ROOT::Math::PtEtaPhiMVector(pt_1_step1, eta_1, phi_1, mass_1)")
+    rdf = rdf.Define(f"p4_2", f"ROOT::Math::PtEtaPhiMVector(pt_2_step1, eta_2, phi_2, mass_2)")
     rdf = rdf.Define(f"p4_Z", f"p4_1 + p4_2")
-    rdf = rdf.Define(f"mass_Z_roccor", f"p4_Z.M()")
+    rdf = rdf.Define(f"mass_Z_step1", f"p4_Z.M()")
 
     return rdf
 
@@ -149,15 +149,16 @@ ROOT.gInterpreter.Declare(
 
 
 def step2(df, hdir, typ):
+
+    df = df.Define("pt_1_step2", "pt_1_step1")
+    df = df.Define("pt_2_step2", "pt_2_step1")
+    df = df.Define("mass_Z_step2", "mass_Z_step1")
+
     if typ == 'GEN':
         # application of mean and sigma to create pull distributions
         ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step2_fitresults.root", "read");')
         ROOT.gROOT.ProcessLine(f'TH3D* h_results_cb = (TH3D*)tf->Get("h_results_cb");')
         ROOT.gROOT.ProcessLine(f'TH3D* h_results_poly = (TH3D*)tf->Get("h_results_poly");')
-        #ROOT.gROOT.ProcessLine('tf->Close()')
-
-        df = df.Define("R_1", "genpt_1/pt_1_roccor")
-        df = df.Define("R_2", "genpt_2/pt_2_roccor")
 
         df = df.Filter(
             "abs(eta_1) < 2.4 && abs(eta_2) < 2.4 &&\
@@ -166,7 +167,7 @@ def step2(df, hdir, typ):
         )
 
         df = df.Define(
-            "genpt_1_smeared",
+            "genpt_1_step2",
             'double pt1;\
             Int_t etabin1 = h_results_cb->GetXaxis()->FindBin(abs(eta_1));\
             Int_t nlbin1 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_1);\
@@ -185,7 +186,7 @@ def step2(df, hdir, typ):
         )
 
         df = df.Define(
-            "genpt_2_smeared",
+            "genpt_2_step2",
             "double pt2;\
             Int_t etabin2 = h_results_cb->GetXaxis()->FindBin(abs(eta_2));\
             Int_t nlbin2 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_2);\
@@ -204,8 +205,8 @@ def step2(df, hdir, typ):
         )
 
         df = df.Define(
-            "genmass_Z_smeared",
-            "sqrt(2 * genpt_1_smeared * genpt_2_smeared * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+            "genmass_Z_step2",
+            "sqrt(2 * genpt_1_step2 * genpt_2_step2 * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
         )
 
     return df
@@ -213,8 +214,15 @@ def step2(df, hdir, typ):
 
 
 def step3(df, hdir, typ):
+
+    if typ == 'GEN':
+        df = df.Define("genpt_1_step3", "genpt_1_step2")
+        df = df.Define("genpt_2_step3", "genpt_2_step2")
+        df = df.Define("genmass_Z_step3", "genmass_Z_step2")
+        
     if typ in ['GEN', 'BKG']:
         typ = 'SIG'
+
 
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step3_it_{typ}.root", "READ");')
     ROOT.gROOT.ProcessLine(f'TH2D* h_kappa_{typ} = (TH2D*)tf->Get("M_{typ}");')
@@ -224,66 +232,138 @@ def step3(df, hdir, typ):
     ROOT.gROOT.ProcessLine(f'tf->Close();')
 
     df = df.Define(
-        f"pt_1_roccor_it",
+        f"pt_1_step3",
         f"double pt;\
-        pt = 1./ (h_kappa_{typ}->GetBinContent( h_kappa_{typ}->GetXaxis()->FindBin(eta_1) , h_kappa_{typ}->GetYaxis()->FindBin(phi_1) ) / pt_1 - \
+        pt = 1./ (h_kappa_{typ}->GetBinContent( h_kappa_{typ}->GetXaxis()->FindBin(eta_1) , h_kappa_{typ}->GetYaxis()->FindBin(phi_1) ) / pt_1_step2 - \
         h_lambd_{typ}->GetBinContent( h_lambd_{typ}->GetXaxis()->FindBin(eta_1) , h_lambd_{typ}->GetYaxis()->FindBin(phi_1) ));\
         return pt;"
     )
     df = df.Define(
-        f"pt_2_roccor_it",
-        f"1./ (h_kappa_{typ}->GetBinContent( h_kappa_{typ}->GetXaxis()->FindBin(eta_2) , h_kappa_{typ}->GetYaxis()->FindBin(phi_2) ) / pt_2 + \
+        f"pt_2_step3",
+        f"1./ (h_kappa_{typ}->GetBinContent( h_kappa_{typ}->GetXaxis()->FindBin(eta_2) , h_kappa_{typ}->GetYaxis()->FindBin(phi_2) ) / pt_2_step2 + \
         h_lambd_{typ}->GetBinContent( h_lambd_{typ}->GetXaxis()->FindBin(eta_2) , h_lambd_{typ}->GetYaxis()->FindBin(phi_2) ))"
     )
     df = df.Define(
-        f"mass_Z_roccor_it",
-        f"sqrt( 2 * pt_1_roccor_it * pt_2_roccor_it * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)) )"
+        f"mass_Z_step3",
+        f"sqrt( 2 * pt_1_step3 * pt_2_step3 * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)) )"
     )
     
     return df
 
 
-def step4(df, hdir, typ):          
-    if typ == 'GEN':
-        ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step4_k.root", "read");')
+def step4(df, hdir, typ):
 
-        for dtsg in ['DATA', 'SIG']:
+    # application of mean and sigma to create pull distributions
+    ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step2_fitresults.root", "read");')
+    ROOT.gROOT.ProcessLine(f'TH3D* h_results_cb = (TH3D*)tf->Get("h_results_cb");')
+    ROOT.gROOT.ProcessLine(f'TH3D* h_results_poly = (TH3D*)tf->Get("h_results_poly");')
 
-            ROOT.gROOT.ProcessLine(f'TH1D* h_k_{dtsg} = (TH1D*)tf->Get("h_k_{dtsg}");')
+    ROOT.gROOT.ProcessLine(f'TFile* tf_k = TFile::Open("{hdir}step4_k_it.root", "read");')
+    ROOT.gROOT.ProcessLine(f'TH2D* h_k = (TH2D*) tf_k->Get("k_hist");')
 
-            df = df.Define(
-                f"genpt_1_smeared_{dtsg}", 
-                f"1. / (1./genpt_1 * (1 + h_k_{dtsg}->GetBinContent(h_k_{dtsg}->FindBin(abs(eta_1))) * (genpt_1_smeared/genpt_1 - 1)))"
-            )
-            df = df.Define(
-                f"genpt_2_smeared_{dtsg}", 
-                f"1. / (1./genpt_2 * (1 + h_k_{dtsg}->GetBinContent(h_k_{dtsg}->FindBin(abs(eta_2))) * (genpt_2_smeared/genpt_2 - 1)))"
-            )
-            df = df.Define(
-                f"genmass_Z_smeared_{dtsg}",
-                f"sqrt(2 * genpt_1_smeared_{dtsg} * genpt_2_smeared_{dtsg} * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
-            )
-
-        # correct mc directly (without gen information)
-        df = df.Define(
-            "pt_1_smeared",
-            f"double pt; \
-            double k_sig = h_k_SIG->GetBinContent(h_k_SIG->FindBin(abs(eta_1))); \
-            double k_data = h_k_DATA->GetBinContent(h_k_DATA->FindBin(abs(eta_1))); \
-            pt = 1. / (1./pt_1_roccor_it * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_1_smeared/genpt_1 -1))); \
-            return pt;"
+    if typ=='GEN':  
+    
+        df = df.Filter(
+            "abs(eta_1) < 2.4 && abs(eta_2) < 2.4 &&\
+            nTrkLayers_1 > 6.5 && nTrkLayers_1 < 17.5 && \
+            nTrkLayers_2 > 6.5 && nTrkLayers_2 < 17.5"
         )
+
         df = df.Define(
-            "pt_2_smeared",
-            f"double pt; \
-            double k_sig = h_k_SIG->GetBinContent(h_k_SIG->FindBin(abs(eta_2))); \
-            double k_data = h_k_DATA->GetBinContent(h_k_DATA->FindBin(abs(eta_2))); \
-            pt = 1. / (1./pt_2_roccor_it * (1 + sqrt(k_data*k_data - k_sig*k_sig) * (genpt_2_smeared/genpt_2 -1))); \
-            return pt;"
+            "genpt_1_step4",
+            'double pt1;\
+            Int_t etabin1 = h_results_cb->GetXaxis()->FindBin(abs(eta_1));\
+            Int_t nlbin1 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_1);\
+            double mean_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 1);\
+            double sig_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 2);\
+            double n_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 3);\
+            double alpha_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 4);\
+            double k1 = h_k->GetBinContent(h_k->GetXaxis()->FindBin(abs(eta_1)), 3);\
+            double rndm_cb1 = (double) cb_rndm(mean_cb1, k1 * sig_cb1, alpha_cb1, n_cb1);\
+            double sig_poly1_a = h_results_poly->GetBinContent(etabin1, nlbin1, 1);\
+            double sig_poly1_b = h_results_poly->GetBinContent(etabin1, nlbin1, 2);\
+            double sig_poly1_c = h_results_poly->GetBinContent(etabin1, nlbin1, 3);\
+            double sig_poly1 = sig_poly1_a + sig_poly1_b * genpt_1 + sig_poly1_c * genpt_1*genpt_1;\
+            if (sig_poly1 < 0) sig_poly1 = 0;\
+            pt1 = 1. / (1./genpt_1 * ( 1 + sig_poly1 * rndm_cb1));\
+            return pt1;'
         )
+
         df = df.Define(
-            f"mass_Z_smeared",
-            f"sqrt(2 * pt_1_smeared * pt_2_smeared * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+            "genpt_2_step4",
+            'double pt2;\
+            Int_t etabin2 = h_results_cb->GetXaxis()->FindBin(abs(eta_2));\
+            Int_t nlbin2 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_2);\
+            double mean_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 1);\
+            double sig_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 2);\
+            double n_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 3);\
+            double alpha_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 4);\
+            double k2 = h_k->GetBinContent(h_k->GetXaxis()->FindBin(abs(eta_2)), 3);\
+            double rndm_cb2 = (double) cb_rndm(mean_cb2, k2*sig_cb2, alpha_cb2, n_cb2);\
+            double sig_poly2_a = h_results_poly->GetBinContent(etabin2, nlbin2, 1);\
+            double sig_poly2_b = h_results_poly->GetBinContent(etabin2, nlbin2, 2);\
+            double sig_poly2_c = h_results_poly->GetBinContent(etabin2, nlbin2, 3);\
+            double sig_poly2 = sig_poly2_a + sig_poly2_b * genpt_2 + sig_poly2_c * genpt_2*genpt_2;\
+            if (sig_poly2 < 0) sig_poly2 = 0;\
+            pt2 = 1. / (1./genpt_2 * ( 1 + sig_poly2 * rndm_cb2));\
+            return pt2;'
         )
+
+        df = df.Define(
+            "genmass_Z_step4",
+            "sqrt(2 * genpt_1_step4 * genpt_2_step4 * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+        )
+
+    if typ == 'DATA':
+        df = df.Define("pt_1_step4", "pt_1_step3")
+        df = df.Define("pt_2_step4", "pt_2_step3")
+        df = df.Define("mass_Z_step4", "mass_Z_step3")   
+
+    else:
+        df = df.Define(
+            "pt_1_step4",
+            'double pt1;\
+            Int_t etabin1 = h_results_cb->GetXaxis()->FindBin(abs(eta_1));\
+            Int_t nlbin1 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_1);\
+            double mean_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 1);\
+            double sig_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 2);\
+            double n_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 3);\
+            double alpha_cb1 = h_results_cb->GetBinContent(etabin1, nlbin1, 4);\
+            double k1 = h_k->GetBinContent(h_k->GetXaxis()->FindBin(abs(eta_1)), 3);\
+            double rndm_cb1 = (double) cb_rndm(mean_cb1, sqrt(k1*k1 - 1) * sig_cb1, alpha_cb1, n_cb1);\
+            double sig_poly1_a = h_results_poly->GetBinContent(etabin1, nlbin1, 1);\
+            double sig_poly1_b = h_results_poly->GetBinContent(etabin1, nlbin1, 2);\
+            double sig_poly1_c = h_results_poly->GetBinContent(etabin1, nlbin1, 3);\
+            double sig_poly1 = sig_poly1_a + sig_poly1_b * pt_1 + sig_poly1_c * pt_1*pt_1;\
+            if (sig_poly1 < 0) sig_poly1 = 0;\
+            pt1 = 1. / (1./pt_1 * ( 1 + sig_poly1 * rndm_cb1));\
+            return pt1;'
+        )
+
+        df = df.Define(
+            "pt_2_step4",
+            'double pt2;\
+            Int_t etabin2 = h_results_cb->GetXaxis()->FindBin(abs(eta_2));\
+            Int_t nlbin2 = h_results_cb->GetYaxis()->FindBin(nTrkLayers_2);\
+            double mean_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 1);\
+            double sig_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 2);\
+            double n_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 3);\
+            double alpha_cb2 = h_results_cb->GetBinContent(etabin2, nlbin2, 4);\
+            double k2 = h_k->GetBinContent(h_k->GetXaxis()->FindBin(abs(eta_2)), 3);\
+            double rndm_cb2 = (double) cb_rndm(mean_cb2, sqrt(k2*k2 - 1) * sig_cb2, alpha_cb2, n_cb2);\
+            double sig_poly2_a = h_results_poly->GetBinContent(etabin2, nlbin2, 1);\
+            double sig_poly2_b = h_results_poly->GetBinContent(etabin2, nlbin2, 2);\
+            double sig_poly2_c = h_results_poly->GetBinContent(etabin2, nlbin2, 3);\
+            double sig_poly2 = sig_poly2_a + sig_poly2_b * pt_2 + sig_poly2_c * pt_2*pt_2;\
+            if (sig_poly2 < 0) sig_poly2 = 0;\
+            pt2 = 1. / (1./pt_2 * ( 1 + sig_poly2 * rndm_cb2));\
+            return pt2;'
+        )
+
+        df = df.Define(
+            "mass_Z_step4",
+            "sqrt(2 * pt_1_step4 * pt_2_step4 * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+        )
+
 
     return df

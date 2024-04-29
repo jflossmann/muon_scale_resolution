@@ -34,8 +34,8 @@ def get_res_correction(
 
     df = df.Define("abseta_1", "abs(eta_1)")
     df = df.Define("abseta_2", "abs(eta_2)")
-    df = df.Define("R_1", "genpt_1/pt_1_roccor")
-    df = df.Define("R_2", "genpt_2/pt_2_roccor")
+    df = df.Define("R_1", "genpt_1/pt_1_step1")
+    df = df.Define("R_2", "genpt_2/pt_2_step1")
 
     df = df.Filter(
         "abseta_1 < 2.4 && abseta_2 < 2.4 &&\
@@ -350,7 +350,7 @@ def plot_closure(ntuples_gen, hdir, pdir, weight):
                 'h_gen_smeared', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'genmass_Z_smeared',
+            'genmass_Z_step2',
             "weight"
         ),
         df.Histo1D(
@@ -358,7 +358,7 @@ def plot_closure(ntuples_gen, hdir, pdir, weight):
                 'h_mc', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'mass_Z_roccor',
+            'mass_Z_step2',
             "weight"
         ),
     ]
@@ -379,7 +379,7 @@ def plot_closure(ntuples_gen, hdir, pdir, weight):
                 'h_gen_smeared_zoom', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'genmass_Z_smeared',
+            'genmass_Z_step2',
             "weight"
         ),
         df.Histo1D(
@@ -387,7 +387,7 @@ def plot_closure(ntuples_gen, hdir, pdir, weight):
                 'h_mc_zoom', '',
                 len(m_bins)-1, array('d', m_bins)
             ),
-            'mass_Z_roccor',
+            'mass_Z_step2',
             "weight"
         )
     ]

@@ -20,7 +20,7 @@ def iterative_correction(samples, eta_bins, phi_bins, mass_bins, hdir, pdir, ite
     df_gen = df_gen.Define("weight", weight)
     df_gen = step1(df_gen, hdir, 'GEN')
     df_gen = step2(df_gen, hdir, 'GEN')
-    df_gen = df_gen.Filter('genmass_Z_smeared > 86 && genmass_Z_smeared < 96')
+    df_gen = df_gen.Filter('genmass_Z_step2 > 86 && genmass_Z_step2 < 96')
 
     h_gen_n = df_gen.Histo3D(
         (
@@ -31,7 +31,7 @@ def iterative_correction(samples, eta_bins, phi_bins, mass_bins, hdir, pdir, ite
         ),
         'eta_1',
         'phi_1',
-        'genmass_Z_smeared',
+        'genmass_Z_step2',
         "weight"
     )
     h_gen_p = df_gen.Histo3D(
@@ -43,7 +43,7 @@ def iterative_correction(samples, eta_bins, phi_bins, mass_bins, hdir, pdir, ite
         ),
         'eta_2',
         'phi_2',
-        'genmass_Z_smeared',
+        'genmass_Z_step2',
         "weight"
     )
 
@@ -88,14 +88,15 @@ def iterative_correction(samples, eta_bins, phi_bins, mass_bins, hdir, pdir, ite
                 df_reco = df_reco.Define("bs_weight", "(int)(poisson())")
                 df_reco = df_reco.Define("weight", weight)
                 df_reco = step1(df_reco, hdir, typ)
-                df_reco = df_reco.Define(f'mass_Z_roccor_it', 'mass_Z_roccor')
-                df_reco = df_reco.Define('pt_1_roccor_it', 'pt_1_roccor')
-                df_reco = df_reco.Define('pt_2_roccor_it', 'pt_2_roccor')
-                df_reco = df_reco.Define('masspt_1', 'mass_Z_roccor * pt_1_roccor')
-                df_reco = df_reco.Define('masspt_2', 'mass_Z_roccor * pt_2_roccor')
+                df_reco = step2(df_reco, hdir, typ)
+                df_reco = df_reco.Define(f'mass_Z_step3', 'mass_Z_step2')
+                df_reco = df_reco.Define('pt_1_step3', 'pt_1_step2')
+                df_reco = df_reco.Define('pt_2_step3', 'pt_2_step2')
+                df_reco = df_reco.Define('masspt_1', 'mass_Z_step2 * pt_1_step2')
+                df_reco = df_reco.Define('masspt_2', 'mass_Z_step2 * pt_2_step2')
 
 
-                mass = f'mass_Z_roccor_it'
+                mass = f'mass_Z_step3'
 
                 df_reco_f = df_reco.Filter(f'{mass} > 86 && {mass} < 96')
                 df_reco_f = df_reco.Filter(f'abs(eta_1) < 2.4 && abs(eta_2) < 2.4')
@@ -127,8 +128,8 @@ def iterative_correction(samples, eta_bins, phi_bins, mass_bins, hdir, pdir, ite
                         "weight"
                     )
 
-                    df_reco_f = df_reco_f.Redefine(f"masspt_1", f"{mass} * pt_1_roccor_it")
-                    df_reco_f = df_reco_f.Redefine(f"masspt_2", f"{mass} * pt_2_roccor_it")
+                    df_reco_f = df_reco_f.Redefine(f"masspt_1", f"{mass} * pt_1_step3")
+                    df_reco_f = df_reco_f.Redefine(f"masspt_2", f"{mass} * pt_2_step3")
 
                     h_reco_mpt_n = df_reco_f.Histo3D(
                         (
@@ -206,20 +207,20 @@ def iterative_correction(samples, eta_bins, phi_bins, mass_bins, hdir, pdir, ite
 
                     # application of corrections
                     df_reco = df_reco.Redefine(
-                        f"pt_1_roccor_it",
+                        f"pt_1_step3",
                         f"double pt;\
                         pt = 1./ (h_kappa_{i}_{typ}->GetBinContent( h_kappa_{i}_{typ}->GetXaxis()->FindBin(eta_1) , h_kappa_{i}_{typ}->GetYaxis()->FindBin(phi_1) ) / pt_1 - \
                         h_lambd_{i}_{typ}->GetBinContent( h_lambd_{i}_{typ}->GetXaxis()->FindBin(eta_1) , h_lambd_{i}_{typ}->GetYaxis()->FindBin(phi_1) ));\
                         return pt;"
                     )
                     df_reco = df_reco.Redefine(
-                        f"pt_2_roccor_it",
+                        f"pt_2_step3",
                         f"1./ (h_kappa_{i}_{typ}->GetBinContent( h_kappa_{i}_{typ}->GetXaxis()->FindBin(eta_2) , h_kappa_{i}_{typ}->GetYaxis()->FindBin(phi_2) ) / pt_2 + \
                         h_lambd_{i}_{typ}->GetBinContent( h_lambd_{i}_{typ}->GetXaxis()->FindBin(eta_2) , h_lambd_{i}_{typ}->GetYaxis()->FindBin(phi_2) ))"
                     )
                     df_reco = df_reco.Redefine(
-                        f"mass_Z_roccor_it",
-                        f"sqrt( 2 * pt_1_roccor_it * pt_2_roccor_it * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)) )"
+                        f"mass_Z_step3",
+                        f"sqrt( 2 * pt_1_step3 * pt_2_step3 * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)) )"
                     )
 
                     df_reco_f = df_reco.Filter(f'{mass} > 86 && {mass} < 96')
@@ -231,9 +232,9 @@ def iterative_correction(samples, eta_bins, phi_bins, mass_bins, hdir, pdir, ite
                 tf.Close()
             
             rang = np.linspace(86, 96, 60)
-            h_mass_it = df_reco.Histo1D(('h_mass_it', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor_it', "weight")
-            h_mass = df_reco.Histo1D(('h_mass', '', len(rang)-1, array('d', rang)), 'mass_Z_roccor', "weight")
-            h_mass_gen = df_gen.Histo1D(('h_mass_gen', '', len(rang)-1, array('d', rang)), 'genmass_Z_smeared', "weight")
+            h_mass_it = df_reco.Histo1D(('h_mass_it', '', len(rang)-1, array('d', rang)), 'mass_Z_step3', "weight")
+            h_mass = df_reco.Histo1D(('h_mass', '', len(rang)-1, array('d', rang)), 'mass_Z_step2', "weight")
+            h_mass_gen = df_gen.Histo1D(('h_mass_gen', '', len(rang)-1, array('d', rang)), 'genmass_Z_step2', "weight")
 
             tf = ROOT.TFile(f'{hdir}step3_closure_{typ}.root', 'recreate')
             h_mass_it.Write()
