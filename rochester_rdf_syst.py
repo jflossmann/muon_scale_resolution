@@ -12,6 +12,7 @@ import python.step1 as step1
 import python.step2 as step2
 import python.step3 as step3
 import python.step4 as step4
+import python.step5 as step5
 
 def parse_args():
     parser = ArgumentParser(
@@ -54,6 +55,13 @@ def parse_args():
         default=False,
         action='store_true',
         help='Residual_correction'
+    )
+    parser.add_argument(
+        '-5',
+        '--final_scale',
+        default=False,
+        action='store_true',
+        help='Additional scale correction to mitigate remaining scale effects'
     )
     parser.add_argument(
         '-B',
@@ -150,8 +158,8 @@ if __name__=='__main__':
         'GEN': {'GEN': f"{datadir}GEN_zPt.root"}
     }
 
-    hdir = f'hists/{year}/'
-    pdir = f'plots/{year}/'
+    hdir = f'hists/{year}new/'
+    pdir = f'plots/{year}new/'
 
     golden_json = 'data/jsons/Run3_2022_2023_Golden.json'
 
@@ -239,7 +247,7 @@ if __name__=='__main__':
         step1.get_scale_corrections(["DATA", "SIG", "GEN"], eta_bins, phi_bins, charge_bins, hdir)
 
     if args.resolution:
-        step2.get_res_correction(ntuples["GEN"]["GEN"], pull_bins, r_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, True, weight)
+        step2.get_res_correction(ntuples["GEN"]["GEN"], pull_bins, r_bins, abseta_bins, nl_bins, pt_bins, pdir, hdir, args.plot, weight)
         if args.plot:
             step2.plot_closure(ntuples["GEN"]["GEN"], hdir, pdir, weight)
 
@@ -250,9 +258,15 @@ if __name__=='__main__':
             step3.plot_closure(samples=ntuples, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=itsteps)
 
     if args.residual:
-        step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight)
-        step4.perform_fits(ntuples, abseta_bins, hdir, pdir, m_bins_4)
+        step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight, doplot=args.plot)
         if args.plot:
             step4.plot_closure(ntuples, hdir, pdir, weight, m_bins_4)
 
+    if args.final_scale:
+        step5.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight, doplot=args.plot)
+        if args.plot:
+            step5.plot_closure(ntuples, hdir, pdir, weight, m_bins_4)
+
     print(f"Done in {round(time()-t0, 1)}s.")
+
+# TODO: optimize structure by loading df only once and using it in all substeps with corresponding filters
