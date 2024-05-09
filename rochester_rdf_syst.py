@@ -123,6 +123,7 @@ if __name__=='__main__':
     datasets = f'data/{year}/datasets.yaml'
     sf_path = f'data/scaleFactors/Run3/2022{postEE}/2022_Z/'\
         f'ScaleFactors_Muon_Z_ID_ISO_2022{postEE}_schemaV2.json'
+    trg_path = f'data/scaleFactors/Run3/2022{postEE}/2022_Z/ScaleFactors_Muon_Z_HLT_2022{postEE}_abseta_pt.root'
     SFs = {
         'id': [
             sf_path,
@@ -131,6 +132,10 @@ if __name__=='__main__':
         'iso': [
             sf_path,
             'NUM_LoosePFIso_DEN_MediumID'
+        ],
+        'trg': [
+            trg_path,
+            'NUM_IsoMu24_DEN_MediumIDandMediumPFIso_abseta_pt'
         ]
     }
     
@@ -158,13 +163,13 @@ if __name__=='__main__':
         'GEN': {'GEN': f"{datadir}GEN_zPt.root"}
     }
 
-    hdir = f'hists/{year}new/'
-    pdir = f'plots/{year}new/'
+    hdir = f'hists/{year}/'
+    pdir = f'plots/{year}/'
 
     golden_json = 'data/jsons/Run3_2022_2023_Golden.json'
 
     # bin defintion
-    pt_bins = [25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
+    pt_bins = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 100, 200]
     oneOverPt_bins = np.linspace(0.019,0.027, 50)
     r_bins = np.linspace(0.5, 1.5, 1000)
     pull_bins=np.linspace(-5,5,100)
@@ -183,7 +188,7 @@ if __name__=='__main__':
 
     nl_bins=[6.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 17.5]
 
-    weight = "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso"
+    weight = "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*sf_trg"
 
     ROOT.gROOT.ProcessLine(f'gRandom->SetSeed({args.process});')
 
@@ -191,7 +196,6 @@ if __name__=='__main__':
     if args.process == -1 and args.syst=='':
         # this is the nominal case
         print("Nominal case.")
-        # ROOT.EnableImplicitMT(5)
 
     elif '1' in args.syst and args.process > -1:
         oneOverPt_bins = np.linspace(
@@ -260,12 +264,7 @@ if __name__=='__main__':
     if args.residual:
         step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight, doplot=args.plot)
         if args.plot:
-            step4.plot_closure(ntuples, hdir, pdir, weight, m_bins_4)
-
-    if args.final_scale:
-        step5.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight, doplot=args.plot)
-        if args.plot:
-            step5.plot_closure(ntuples, hdir, pdir, weight, m_bins_4)
+            step4.plot_closure(ntuples, hdir, pdir, weight, m_bins_4, year)
 
     print(f"Done in {round(time()-t0, 1)}s.")
 
