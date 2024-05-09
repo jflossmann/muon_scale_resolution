@@ -236,42 +236,43 @@ def residual_correction(samples, abseta_bins, hdir, pdir, weight, doplot):
             chi2s = iterate(i, df_gen, rfile_ks, rfile_hists, abseta_bins, m_bins, chi2s, pdir, doplot, typ)
 
 
-# TODO: add residual k-factor for scale or replace by fit
 
-
-def plot_closure(samples, hdir, pdir, weight, m_bins):
+def plot_closure(samples, hdir, pdir, weight, m_bins, run):
     pdir += 'residual/'
+    m_bins = np.linspace(80, 102, 45)
     os.makedirs(pdir, exist_ok=True)
     hists = []
     # """
     for typ in tqdm(samples):
-        for subtyp in samples[typ]:
-            df = ROOT.RDataFrame("Events", samples[typ][subtyp])
-            # df = df.Filter("pt_1>26 && pt_2>26 && pt_1 < 500 && pt_2<500")
-            df = df.Define("bs_weight", "(int)(poisson())")
-            df = df.Define("weight", weight)
+        allfiles = []
+        for s in samples[typ]:
+            allfiles += glob.glob(samples[typ][s])
+        df = ROOT.RDataFrame("Events", allfiles)
 
-            df = step1(df, hdir, typ)
-            df = step2(df, hdir, typ)
-            df = step3(df, hdir, typ)
-            df = step4(df, hdir, typ)
+        df = df.Define("bs_weight", "(int)(poisson())")
+        df = df.Define("weight", weight)
+
+        df = step1(df, hdir, typ)
+        df = step2(df, hdir, typ)
+        df = step3(df, hdir, typ)
+        df = step4(df, hdir, typ)
             
-            if typ == 'GEN':
-                h_names = ['genmass_Z_step4', "genmass_Z_step3", "genmass_Z", "mass_Z_step4"]
-            else: 
-                h_names = ['mass_Z_step4', 'mass_Z_step3', "mass_Z_step2"]
+        if typ == 'GEN':
+            h_names = ['genmass_Z_step4', "genmass_Z_step3", "genmass_Z", "mass_Z_step4", "genmass_Z"]
+        else: 
+            h_names = ['mass_Z_step4', 'mass_Z_step3', "mass_Z_step2", "mass_Z"]
 
-            for h in h_names:
-                hists.append(
-                    df.Histo1D(
-                        (
-                            f'{h}_{subtyp}', '',
-                            len(m_bins)-1, array('d', m_bins),
-                        ),
-                        h,
-                        "weight"
-                    )
+        for h in h_names:
+            hists.append(
+                df.Histo1D(
+                    (
+                        f'{h}_{typ}', '',
+                        len(m_bins)-1, array('d', m_bins),
+                    ),
+                    h,
+                    "weight"
                 )
+            )
 
     tf = ROOT.TFile(f'{hdir}step4_closure.root', 'recreate')
     for h in hists:
@@ -279,42 +280,45 @@ def plot_closure(samples, hdir, pdir, weight, m_bins):
     tf.Close()
     # """
     tf = ROOT.TFile(f'{hdir}step4_closure.root', 'read')
-    print(tf.ls())
+
+    # generator distributions
     h_gen_step4 =  tf.Get('genmass_Z_step4_GEN')
-    h_gen_step4.Sumw2()
     h_gen_step4.Scale(1./h_gen_step4.Integral())
 
     h_gen_step3 =  tf.Get('genmass_Z_step3_GEN')
-    h_gen_step3.Sumw2()
     h_gen_step3.Scale(1./h_gen_step3.Integral())
 
+    h_gen_uncorr = tf.Get('genmass_Z_GEN')
+    h_gen_uncorr.Scale(1./h_gen_uncorr.Integral())
 
-    h_tmp_data = tf.Get(f'mass_Z_step4_DATA')
-    print(h_tmp_data.Integral())
-    h_tmp_bkg = tf.Get('mass_Z_step4_WW')
-    print(h_tmp_bkg.Integral())
-    h_tmp_bkg.Add(tf.Get('mass_Z_step4_WZ'))
-    h_tmp_bkg.Add(tf.Get('mass_Z_step4_ZZ'))
-    h_tmp_bkg.Add(tf.Get('mass_Z_step4_TT'))
-    h_tmp_mc = h_tmp_bkg.Clone('mass_Z_step4_mc')
-    h_tmp_sig = tf.Get('mass_Z_step4_SIG').Clone('mass_Z_tmp_sig')
-    h_tmp_mc.Add(h_tmp_sig)
-    h_tmp_data.Scale(h_tmp_mc.Integral()/h_tmp_data.Integral())
+    # data distributions - bkg contributions
+    h_data = tf.Get(f'mass_Z_step4_DATA')
+    h_tmp_bkg = tf.Get('mass_Z_step4_BKG')
+    h_tmp_sig = tf.Get('mass_Z_step4_SIG')
+    scale = h_data.Integral() / (h_tmp_sig.Integral() + h_tmp_bkg.Integral())
+    h_tmp_bkg.Scale(scale)
 
-    h_data = h_tmp_data.Clone('mass_Z_step4_data')
     h_data.Add(h_tmp_bkg, -1)
-    h_data.Sumw2()
     h_data.Scale(1./h_data.Integral())
 
-    # MC
+    h_data_uncorr = tf.Get("mass_Z_DATA")
+    h_tmp_bkg = tf.Get('mass_Z_BKG')
+    h_tmp_sig = tf.Get('mass_Z_SIG')
+    scale = h_data_uncorr.Integral() / (h_tmp_sig.Integral() + h_tmp_bkg.Integral())
+    h_tmp_bkg.Scale(scale)
 
+    h_data_uncorr.Add(h_tmp_bkg, -1)
+    h_data_uncorr.Scale(1./h_data_uncorr.Integral())
+
+    # MC
     h_mc_step4 = tf.Get(f'mass_Z_step4_SIG')
-    h_mc_step4.Sumw2()
     h_mc_step4.Scale(1./h_mc_step4.Integral())
 
     h_mc_step3 = tf.Get(f'mass_Z_step3_SIG')
-    h_mc_step3.Sumw2()
     h_mc_step3.Scale(1./h_mc_step3.Integral())
+
+    h_mc_uncorr = tf.Get("mass_Z_SIG")
+    h_mc_uncorr.Scale(1./h_mc_uncorr.Integral())
 
     # first show impact of gensmearing to MC
     plot_ratio(
@@ -326,13 +330,14 @@ def plot_closure(samples, hdir, pdir, weight, m_bins):
         title='',
         outfile=f'{pdir}Z_mass_comparison_GEN',
         text=['','',''],
-        #xrange=[80, 102],
+        xrange=[80, 102],
         ratio_range = [0.9, 1.1],
         labels={
             'gen': 'presemeared genmass',
             'mc': 'k-smeared genmass',
             'dt': 'data'
-        }
+        },
+        run=run
     )
 
     plot_ratio(
@@ -344,13 +349,52 @@ def plot_closure(samples, hdir, pdir, weight, m_bins):
         title='',
         outfile=f'{pdir}Z_mass_comparison_RECO',
         text=['','',''],
-        #xrange=[80, 102],
+        xrange=[80, 102],
         ratio_range = [0.9, 1.1],
         labels={
             'gen': 'reco-mass',
             'mc': 'k-smeared reco-mass',
             'dt': 'data'
-        }
+        },
+        run=run
+    )
+
+    plot_ratio(
+        hists={
+            'gen': h_gen_uncorr,
+            'mc': h_mc_uncorr,
+            'dt': h_data_uncorr
+        }, 
+        title='',
+        outfile=f'{pdir}Z_mass_comparison_uncorrected',
+        text=['','',''],
+        xrange=[80, 102],
+        ratio_range = [0.9, 1.1],
+        labels={
+            'gen': 'uncorr. gen mass',
+            'mc': 'uncorr. reco mass',
+            'dt': 'uncorr. data'
+        },
+        run=run
+    )
+
+    plot_ratio(
+        hists={
+            'gen': h_gen_step4,
+            'mc': h_mc_step4,
+            'dt': h_data
+        }, 
+        title='',
+        outfile=f'{pdir}Z_mass_comparison_corrected',
+        text=['','',''],
+        xrange=[80, 102],
+        ratio_range = [0.9, 1.1],
+        labels={
+            'gen': 'corr. gen mass',
+            'mc': 'corr. reco mass',
+            'dt': 'corr. data'
+        },
+        run=run
     )
 
     tf.Close()
