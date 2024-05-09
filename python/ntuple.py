@@ -73,8 +73,41 @@ ROOT.gInterpreter.Declare("""
 """)
 
 
-# TODO: check if event in golden lumi json
 
+# function for trigger matching
+ROOT.gInterpreter.Declare("""
+    UInt_t trg_match_ind(
+        Float_t eta,
+        Float_t phi,
+        Int_t nTrigObj,
+        ROOT::VecOps::RVec<UShort_t> *TrigObj_id,
+        ROOT::VecOps::RVec<Float_t> *TrigObj_eta,
+        ROOT::VecOps::RVec<Float_t> *TrigObj_phi,
+        Int_t match1
+    ){
+        Int_t index = -99;
+        Float_t dRmin = 1000;
+        Float_t dR, dEta, dPhi;
+        for(int i=0; i<nTrigObj; i++){
+            if (TrigObj_id->at(i) != 13) continue;
+            if (TrigObj_id->at(i) == match1) continue;
+            dEta = eta - TrigObj_eta->at(i);
+            dPhi = (phi - TrigObj_phi->at(i));
+            if (dPhi > 3.1415) dPhi = 2*3.1415 - dPhi;
+            dR = sqrt(dEta*dEta + dPhi*dPhi);
+            if (dR > 0.1) continue;
+            if (index > -1){
+                if(dR < dRmin) {
+                    dRmin = dR;
+                    index = i;
+                }
+                else continue;
+            }
+            else index = i;
+        }
+        return index;
+    }
+""")
 
 # function in c++ code. Finds indices of muons matched to GEN
 ROOT.gInterpreter.Declare(
@@ -113,7 +146,8 @@ ROOT.gInterpreter.Declare(
             if (mother_id != 23) continue;
 
             dEta = eta - GenPart_eta->at(j);
-            dPhi = phi - GenPart_phi->at(j);
+            dPhi = abs(phi - GenPart_phi->at(j));
+            if (dPhi > 3.1415) dPhi = 2*3.1415 - dPhi;
             dR = sqrt(dEta*dEta + dPhi*dPhi);
             
             if(dR < deltaR){
@@ -217,8 +251,15 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
     ROOT.gROOT.ProcessLine('TH1D* h_mc = (TH1D*)tf->Get("h_Zboson_pt_SIG");')
     ROOT.gROOT.ProcessLine('TH1D* h_ratio = (TH1D*)h_dt->Clone();')
     ROOT.gROOT.ProcessLine('h_ratio->Divide(h_mc)')
+    trgpath = SFs['trg'][0]
+    trgname = SFs['trg'][1]
+    ROOT.gROOT.ProcessLine(f'TFile *trg_tf = TFile::Open("{trgpath}", "READ");')
+    ROOT.gROOT.ProcessLine(f'TH2F *trg_mc = (TH2F*)trg_tf->Get("{trgname}_efficiencyMC");')
+    ROOT.gROOT.ProcessLine(f'TH2F *trg_dt = (TH2F*)trg_tf->Get("{trgname}_efficiencyData");')
+
 
     for sf in SFs:
+        if sf=='trg': continue
         with open(SFs[sf][0]) as _file:
             tmp_dicts = json.load(_file)["corrections"]
             for tmp_dict in tmp_dicts:
@@ -229,6 +270,7 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
         for sample in ntuples[typ]:
             #if sample !='SIG' : continue
             print(sample)
+            print(ntuples[typ][sample].replace('_*.root', '.yaml').replace(sample, f'ntuples/{sample}'))
             sampleyaml = yaml_loader(ntuples[typ][sample].replace('_*.root', '.yaml'))
 
             rdf = ROOT.RDataFrame("Events", ntuples[typ][sample])
@@ -245,40 +287,86 @@ def weight_zpt(ntuples, hdir, eta_bins, phi_bins, SFs):
 
             if typ != 'DATA':
                 for sf in SFs:
-                    etabins = SFs[sf][2]["data"]["edges"]
-                    if SFs[sf][2]["inputs"][0]["name"] != "abseta":
-                        print("The sf does not seem to be binned in abseta. Please adjust.")
-                        break
+                    if sf != 'trg':
+                        etabins = SFs[sf][2]["data"]["edges"]
+                        if SFs[sf][2]["inputs"][0]["name"] != "abseta":
+                            print("The sf does not seem to be binned in abseta. Please adjust.")
+                            break
 
-                    for eta in range(len(etabins)-1):
-                        tmp_dict = SFs[sf][2]["data"]["content"][eta]
-                        ptbins = tmp_dict["edges"]
+                        for eta in range(len(etabins)-1):
+                            tmp_dict = SFs[sf][2]["data"]["content"][eta]
+                            ptbins = tmp_dict["edges"]
 
-                        for pt in range(len(ptbins)-1):
+                            for pt in range(len(ptbins)-1):
 
-                            systs = tmp_dict["content"][pt]["content"]
-                            for syst in systs:
-                                if syst["key"] == 'nominal':
-                                    sf_val = syst["value"]
+                                systs = tmp_dict["content"][pt]["content"]
+                                for syst in systs:
+                                    if syst["key"] == 'nominal':
+                                        sf_val = syst["value"]
 
-                            rdf = rdf.Redefine(
-                                f"sf_{sf}_1",
-                                f'double sf;\
-                                if (abs(eta_1) > {etabins[eta]} && abs(eta_1) < {etabins[eta+1]} &&\
-                                pt_1 > {ptbins[pt]} && pt_1 < {ptbins[pt+1]}) sf = {sf_val};\
-                                else sf = sf_{sf}_1;\
-                                return sf;'
-                            )
-                            rdf = rdf.Redefine(
-                                f"sf_{sf}_2",
-                                f'double sf;\
-                                if (abs(eta_2) > {etabins[eta]} && abs(eta_2) < {etabins[eta+1]} &&\
-                                pt_2 > {ptbins[pt]} && pt_2 < {ptbins[pt+1]}) sf = {sf_val};\
-                                else sf = sf_{sf}_2;\
-                                return sf;'
-                            )
+                                rdf = rdf.Redefine(
+                                    f"sf_{sf}_1",
+                                    f'double sf;\
+                                    if (abs(eta_1) > {etabins[eta]} && abs(eta_1) < {etabins[eta+1]} &&\
+                                    pt_1 > {ptbins[pt]} && pt_1 < {ptbins[pt+1]}) sf = {sf_val};\
+                                    else sf = sf_{sf}_1;\
+                                    return sf;'
+                                )
+                                rdf = rdf.Redefine(
+                                    f"sf_{sf}_2",
+                                    f'double sf;\
+                                    if (abs(eta_2) > {etabins[eta]} && abs(eta_2) < {etabins[eta+1]} &&\
+                                    pt_2 > {ptbins[pt]} && pt_2 < {ptbins[pt+1]}) sf = {sf_val};\
+                                    else sf = sf_{sf}_2;\
+                                    return sf;'
+                                )
+                    else:
+                        rdf = rdf.Redefine(
+                            "sf_trg_1",
+                            'trg_dt->GetBinContent(trg_dt->FindBin(abs(eta_1), pt_1)) /\
+                             trg_mc->GetBinContent(trg_mc->FindBin(abs(eta_1), pt_1))'
+                        )
+                        rdf = rdf.Redefine(
+                            "sf_trg_2",
+                            'trg_dt->GetBinContent(trg_dt->FindBin(abs(eta_2), pt_2)) /\
+                             trg_mc->GetBinContent(trg_mc->FindBin(abs(eta_2), pt_2))'
+                        )
+
+
             for sf in SFs:
-                rdf = rdf.Define(f"sf_{sf}", f"sf_{sf}_1 * sf_{sf}_2")
+                if sf != 'trg' or typ=='DATA':
+                    rdf = rdf.Define(f"sf_{sf}", f"sf_{sf}_1 * sf_{sf}_2")
+                else:
+                    rdf = rdf.Define(
+                        "sf_trg",
+                        '''
+                        double sf = 1.0;  // Default scale factor
+                        double eff_mc_1 = trg_mc->GetBinContent(trg_mc->FindBin(abs(eta_1), pt_1));
+                        double eff_mc_2 = trg_mc->GetBinContent(trg_mc->FindBin(abs(eta_2), pt_2));
+                        double eff_dt_1 = trg_dt->GetBinContent(trg_dt->FindBin(abs(eta_1), pt_1));
+                        double eff_dt_2 = trg_dt->GetBinContent(trg_dt->FindBin(abs(eta_2), pt_2));
+
+                        if(trg_match_1 == 0){
+                            eff_mc_1 = 0;
+                            eff_dt_1 = 0;
+                        }
+                        if(trg_match_2 == 0){
+                            eff_mc_2 = 0;
+                            eff_dt_2 = 0;
+                        }
+
+                        double eff_mc = 1.0 - (1.0 - eff_mc_1) * (1.0 - eff_mc_2);
+                        double eff_dt = 1.0 - (1.0 - eff_dt_1) * (1.0 - eff_dt_2);
+
+                        if (eff_mc == 0) {
+                            std::cout << "mc efficiency is 0 in this bin: " << pt_1 << ", " << pt_2 << ", " << eta_1 << ", " << eta_2 << std::endl;
+                            return 1.0;  // Return default scale factor if eff_mc is zero
+                        } else {
+                            sf = eff_dt / eff_mc;  // Calculate scale factor
+                            return sf;
+                        }
+                        '''
+                    )
 
             rdf.Snapshot("Events", ntuples[typ][sample].replace("*.root", "zPt.root").replace('ntuples/',''))
 
@@ -300,7 +388,7 @@ def make_ntuples(nanoAODs, datasets, datadir, golden_json):
         start = time.time()
         print(f"Processing {sample} samples. Number of Files: {len(nanoAODs[sample])}")
         args = [(datasets, sample, _file, number, datadir, golden_json) for number, _file in enumerate(nanoAODs[sample])]
-        nthreads = 8
+        nthreads = 32
 
         pool = Pool(nthreads, initargs=(RLock,), initializer=tqdm.set_lock)
         for genweight in tqdm(
@@ -319,8 +407,6 @@ def make_ntuples(nanoAODs, datasets, datadir, golden_json):
             with open(datadir + 'GEN.yaml', 'w') as f:
                 yaml.dump(datasets[sample], f)
 
-        # for a in args:
-        #     weight = job_wrapper(a)
         end = time.time()
         print(f"Finished processing of {sample} samples in {round(end-start,1)} s.")
 
@@ -335,7 +421,8 @@ def process_ntuples(datasets, sample, _file, number, datadir, golden_json):
             "pt_1", "mass_1", "eta_1", "phi_1", "charge_1",
             "pt_2", "mass_2", "eta_2", "phi_2", "charge_2",
             "genWeight",
-            "nTrkLayers_1", "nTrkLayers_2"
+            "nTrkLayers_1", "nTrkLayers_2",
+            "trg_match_1", "trg_match_2"
         ]
     # load nanoAOD
     rdf = ROOT.RDataFrame("Events", _file)
@@ -373,6 +460,14 @@ def process_ntuples(datasets, sample, _file, number, datadir, golden_json):
     rdf = rdf.Define("charge_2", "Muon_charge[ind[1]]")
     rdf = rdf.Define("nTrkLayers_1", "Muon_nTrackerLayers[ind[0]]")
     rdf = rdf.Define("nTrkLayers_2", "Muon_nTrackerLayers[ind[1]]")
+
+    # check trigger matches
+    rdf = rdf.Define("trg_ind0", "trg_match_ind(eta_1, phi_1, nTrigObj, &TrigObj_id, &TrigObj_eta, &TrigObj_phi, -99)")
+    rdf = rdf.Define("trg_ind1", "trg_match_ind(eta_2, phi_2, nTrigObj, &TrigObj_id, &TrigObj_eta, &TrigObj_phi, trg_ind0)")
+    rdf = rdf.Filter("trg_ind0 >= 0 || trg_ind1 >= 0")
+
+    rdf = rdf.Define("trg_match_1", "int match; if(trg_ind0 >= 0) match = 1; else match = 0; return match;")
+    rdf = rdf.Define("trg_match_2", "int match; if(trg_ind1 >= 0) match = 1; else match = 0; return match;")
 
     # Define quantities of Z boson and collect those events with 50 < m_Z < 130
     rdf = rdf.Define("p4_1", "ROOT::Math::PtEtaPhiMVector(pt_1, eta_1, phi_1, mass_1)")
