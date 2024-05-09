@@ -234,13 +234,13 @@ def step3(df, hdir, typ):
     df = df.Define(
         f"pt_1_step3",
         f"double pt;\
-        pt = 1./ (h_kappa_{typ}->GetBinContent( h_kappa_{typ}->GetXaxis()->FindBin(eta_1) , h_kappa_{typ}->GetYaxis()->FindBin(phi_1) ) / pt_1_step2 - \
+        pt = 1./ (h_kappa_{typ}->GetBinContent( h_kappa_{typ}->GetXaxis()->FindBin(eta_1) , h_kappa_{typ}->GetYaxis()->FindBin(phi_1) ) / pt_1 - \
         h_lambd_{typ}->GetBinContent( h_lambd_{typ}->GetXaxis()->FindBin(eta_1) , h_lambd_{typ}->GetYaxis()->FindBin(phi_1) ));\
         return pt;"
     )
     df = df.Define(
         f"pt_2_step3",
-        f"1./ (h_kappa_{typ}->GetBinContent( h_kappa_{typ}->GetXaxis()->FindBin(eta_2) , h_kappa_{typ}->GetYaxis()->FindBin(phi_2) ) / pt_2_step2 + \
+        f"1./ (h_kappa_{typ}->GetBinContent( h_kappa_{typ}->GetXaxis()->FindBin(eta_2) , h_kappa_{typ}->GetYaxis()->FindBin(phi_2) ) / pt_2 + \
         h_lambd_{typ}->GetBinContent( h_lambd_{typ}->GetXaxis()->FindBin(eta_2) , h_lambd_{typ}->GetYaxis()->FindBin(phi_2) ))"
     )
     df = df.Define(
