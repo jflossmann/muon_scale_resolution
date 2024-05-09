@@ -3,7 +3,7 @@ from array import array
 import os
 
 
-def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range = [0.7, 1.3], labels={'mc':'MC', 'dt': 'Data', 'gen': 'Gen'}):
+def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range = [0.7, 1.3], labels={'mc':'MC', 'dt': 'Data', 'gen': 'Gen'}, run='2022'):
     ROOT.gROOT.SetBatch(1)
 
     c = ROOT.TCanvas("c", title, 900, 800)
@@ -66,7 +66,7 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
     cmsTex.SetTextSize(0.035)
     cmsTex.DrawLatex(0.11,0.915,'#bf{CMS} #it{Preliminary}')
     #cmsTex.DrawLatex(0.745, 0.92, '{} data events'.format(evts))
-    cmsTex.DrawLatex(0.73, 0.915, '(2022, 13.6 TeV)')
+    cmsTex.DrawLatex(0.71, 0.915, f'({run}, 13.6 TeV)')
     
     #cmsTex.DrawLatex(0.7, 0.85, 'A-D = {}'.format(test_ad))
     cmsTex.DrawLatex(0.68, 0.86, text[0])
@@ -98,7 +98,7 @@ def plot_ratio(hists, title, outfile, text=['','',''], xrange=None, ratio_range 
     ratio_data.GetXaxis().SetTitleOffset(0.7)
     ratio_data.GetXaxis().SetTitleSize(0.15)
     ratio_data.GetXaxis().SetTickSize(0.07)
-    ratio_data.GetXaxis().SetTitle('m_#mu#mu (GeV)')
+    ratio_data.GetXaxis().SetTitle('m_{#mu#mu} (GeV)')
 
     ratio_data.GetYaxis().SetRangeUser(ratio_range[0], ratio_range[1])
     ratio_data.GetYaxis().SetLabelSize(0.09)
