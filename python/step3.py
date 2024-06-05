@@ -79,6 +79,12 @@ def make_hists(df, typ, rfile, eta_bins, phi_bins, mass_bins, variables):
                 )
 
     tf = ROOT.TFile(rfile, 'update')
+    if h_n.GetName() in tf.GetListOfKeys():
+        tf.Delete(h_n.GetName()+';1')
+        tf.Delete(h_p.GetName()+';1')
+        tf.Delete(means_n.GetName()+';1')
+        tf.Delete(means_p.GetName()+';1')
+        tf.Delete(means.GetName()+';1')
     h_n.Write()
     h_p.Write()
     means_n.Write()

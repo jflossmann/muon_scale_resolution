@@ -383,6 +383,7 @@ def make_ntuples(nanoAODs, datasets, datadir, golden_json):
     datasets = yaml_loader(datasets)
 
     for sample in nanoAODs:
+        # if sample != 'DY': continue
         sum_genweights = 0
 
         start = time.time()

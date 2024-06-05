@@ -20,9 +20,9 @@ def get_res_correction(
     ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
     ROOT.RooMsgService.instance().setSilentMode(True)
 
-    pdir = pdir+'resolution/'
-    os.makedirs(pdir, exist_ok=True)
     if do_plot:
+        pdir = pdir+'resolution/'
+        os.makedirs(pdir, exist_ok=True)
         os.makedirs(pdir+'CB_fits_new/', exist_ok=True)
         os.makedirs(pdir+'pol_fits_new/', exist_ok=True)
     

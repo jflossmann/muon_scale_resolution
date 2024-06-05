@@ -12,7 +12,7 @@ import python.step1 as step1
 import python.step2 as step2
 import python.step3 as step3
 import python.step4 as step4
-import python.step5 as step5
+import python.evaluate as evaluate_uncertainties
 
 def parse_args():
     parser = ArgumentParser(
@@ -58,7 +58,7 @@ def parse_args():
     )
     parser.add_argument(
         '-5',
-        '--final_scale',
+        '--uncertainties',
         default=False,
         action='store_true',
         help='Additional scale correction to mitigate remaining scale effects'
@@ -225,20 +225,21 @@ if __name__=='__main__':
         pdir += f'condor/bin_step4/{args.process}/'
 
     elif 'zPt' in args.syst:
-        weight = "genWeight/sumwWeight*xsec*sf_id*sf_iso"
+        weight = "genWeight/sumwWeight*xsec*sf_id*sf_iso*sf_trg"
         hdir += 'condor/no_zPt/'
         pdir += 'condor/no_zPt/'
 
     elif 'stat' in args.syst and args.process > -1:
-        weight = "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*bs_weight"
-        hdir += f'condor/{args.process}/'
-        pdir += f'condor/{args.process}/'
+        weight = "zPtWeight*genWeight/sumwWeight*xsec*sf_id*sf_iso*sf_trg*bs_weight"
+        hdir += f'condor/stat/{args.process}/'
+        pdir += f'condor/stat/{args.process}/'
 
     else:
         print("somethings broken. Please check input!")
 
     os.makedirs(hdir, exist_ok=True)
-    os.makedirs(pdir, exist_ok=True)
+    if args.plot:
+        os.makedirs(pdir, exist_ok=True)
 
  
     if args.ntuples:
@@ -256,7 +257,7 @@ if __name__=='__main__':
             step2.plot_closure(ntuples["GEN"]["GEN"], hdir, pdir, weight)
 
     if args.iterative:
-        itsteps = 25
+        itsteps = 20
         step3.iterative_correction(samples=ntuples, eta_bins=eta_bins, phi_bins=phi_bins, mass_bins=m_bins_3, hdir=hdir, pdir=pdir, iterationsteps=itsteps, weight=weight)
         if args.plot:
             step3.plot_closure(samples=ntuples, hdir=hdir, pdir=pdir, eta_bins=eta_bins, phi_bins=phi_bins, iterationsteps=itsteps)
@@ -265,6 +266,9 @@ if __name__=='__main__':
         step4.residual_correction(samples=ntuples, abseta_bins=abseta_bins, hdir=hdir, pdir=pdir, weight=weight, doplot=args.plot)
         if args.plot:
             step4.plot_closure(ntuples, hdir, pdir, weight, m_bins_4, year)
+
+    if args.uncertainties:
+        evaluate_uncertainties.plot_closure(ntuples, hdir, pdir, weight, m_bins_4)
 
     print(f"Done in {round(time()-t0, 1)}s.")
 

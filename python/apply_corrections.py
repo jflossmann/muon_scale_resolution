@@ -107,7 +107,7 @@ ROOT.gInterpreter.Declare(
         cdfPa = cdf(m+a*s);
     }
     double pdf(double x) const{ 
-    double d=(x-m)/s;
+        double d=(x-m)/s;
         if(d<-a) return NA*pow(B-d, -n);
         if(d>a) return NA*pow(B+d, -n);
         return N*exp(-d*d/2);
@@ -223,7 +223,6 @@ def step3(df, hdir, typ):
     if typ in ['GEN', 'BKG']:
         typ = 'SIG'
 
-
     ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step3_correction.root", "READ");')
     ROOT.gROOT.ProcessLine(f'TH2D* h_kappa_{typ} = (TH2D*)tf->Get("M_{typ}");')
     ROOT.gROOT.ProcessLine(f'h_kappa_{typ}->SetDirectory(nullptr);')
@@ -319,7 +318,9 @@ def step4(df, hdir, typ):
             if (sig_poly1 < 0) sig_poly1 = 0;\
             double k1 = h_k->GetBinContent(h_k->GetXaxis()->FindBin(abs(eta_1)), 3);\
             double k1_sig = h_k_sig->GetBinContent(h_k_sig->GetXaxis()->FindBin(abs(eta_1)), 3);\
-            pt1 = pt_1_step3 * ( 1 + sqrt(k1*k1 - k1_sig * k1_sig) * sig_poly1 * rndm_cb1);\
+            double k = 0;\
+            if (k1_sig < k1) k = sqrt(k1*k1 - k1_sig*k1_sig);\
+            pt1 = pt_1_step3 * ( 1 + k * sig_poly1 * rndm_cb1);\
             return pt1;'
         )
 
@@ -340,7 +341,9 @@ def step4(df, hdir, typ):
             if (sig_poly2 < 0) sig_poly2 = 0;\
             double k2 = h_k->GetBinContent(h_k->GetXaxis()->FindBin(abs(eta_2)), 3);\
             double k2_sig = h_k_sig->GetBinContent(h_k_sig->GetXaxis()->FindBin(abs(eta_2)), 3);\
-            pt2 = pt_2_step3 * ( 1 + sqrt(k2*k2 - k2_sig*k2_sig) * sig_poly2 * rndm_cb2);\
+            double k = 0;\
+            if (k2_sig < k2) k = sqrt(k2*k2 - k2_sig*k2_sig);\
+            pt2 = pt_2_step3 * ( 1 + k * sig_poly2 * rndm_cb2);\
             return pt2;'
         )
 
@@ -349,39 +352,159 @@ def step4(df, hdir, typ):
             "sqrt(2 * pt_1_step4 * pt_2_step4 * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
         )
 
-
-
     return df
 
 
-def step5(df, hdir, typ):
+def uncertainties(df, hdir, typ):
 
-    gen = ''
+    if typ == 'SIG':
+        ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}systs/stat.root", "read");')
+        ROOT.gROOT.ProcessLine(f'TProfile2D* h_kappa = (TProfile2D*) tf->Get("M_SIG3_all_pyx");')
+        ROOT.gROOT.ProcessLine(f'TProfile2D* h_lambd = (TProfile2D*) tf->Get("A_SIG3_all_pyx");')
+        ROOT.gROOT.ProcessLine(f'TProfile* h_k_unc_sig = (TProfile*) tf->Get("k_all_SIG_pfx");')
+        ROOT.gROOT.ProcessLine(f'TProfile* h_k_unc_data = (TProfile*) tf->Get("k_all_DATA_pfx");')
 
-    if typ == 'BKG':
-        typ = 'SIG'
+        ROOT.gROOT.ProcessLine(f'TFile* tf_corr_data = TFile::Open("{hdir}systs/M_A_DATA.root", "read");')
+        ROOT.gROOT.ProcessLine(f'TFile* tf_corr_sig = TFile::Open("{hdir}systs/M_A_SIG.root", "read");')
+        ROOT.gROOT.ProcessLine(f'TProfile2D* h_rho_data = (TProfile2D*) tf_corr_data->Get("correlationDATA3");')
+        ROOT.gROOT.ProcessLine(f'TProfile2D* h_rho_sig = (TProfile2D*) tf_corr_sig->Get("correlationSIG3");')
 
-    if typ == 'GEN':
-        gen = 'gen'
+        ROOT.gROOT.ProcessLine(f'TFile* tf_k = TFile::Open("{hdir}step4_k.root", "read");')
+        ROOT.gROOT.ProcessLine(f'TH2D* h_k = (TH2D*) tf_k->Get("k_hist_DATA");')
+        ROOT.gROOT.ProcessLine(f'TH2D* h_k_sig = (TH2D*) tf_k->Get("k_hist_SIG");')
 
-    ROOT.gROOT.ProcessLine(f'TFile* tf = TFile::Open("{hdir}step5_corrections.root", "read");')
-    ROOT.gROOT.ProcessLine(f'TH1D* h_tocorr = (TH1D*)tf->Get("means_mass_Z_{typ}");')
-    ROOT.gROOT.ProcessLine(f'TH1D* h_corr = (TH1D*)tf->Get("means_mass_Z_original_GEN");')
+        df = df.Define(
+            "scale_unc_1",
+            "double unc_num, unc_den, unc;\
+            int etabin = h_kappa->GetXaxis()->FindBin(eta_1);\
+            int phibin = h_kappa->GetYaxis()->FindBin(phi_1);\
+            double unc_kappa = h_kappa->GetBinError(etabin, phibin);\
+            double unc_lambd = h_lambd->GetBinError(etabin, phibin);\
+            double rho = h_rho_sig->GetBinContent(etabin, phibin);\
+            unc_num = (unc_kappa*unc_kappa / (pt_1_step3*pt_1_step3) + unc_lambd*unc_lambd + 2*charge_1*rho*unc_kappa/pt_1_step3*unc_lambd);\
+            unc_den = pow(1./pt_1_step4, 4);\
+            unc = sqrt(unc_num / unc_den);\
+            return unc;"
+        )
+        df = df.Define(
+            "pt_1_step4_scaleup",
+            "pt_1_step4 + scale_unc_1"
+        )
+        df = df.Define(
+            "pt_1_step4_scaledn",
+            "pt_1_step4 - scale_unc_1"
+        )
+        df = df.Define(
+            "scale_unc_2",
+            "double unc_num, unc_den, unc;\
+            int etabin = h_kappa->GetXaxis()->FindBin(eta_2);\
+            int phibin = h_kappa->GetYaxis()->FindBin(phi_2);\
+            double unc_kappa = h_kappa->GetBinError(etabin, phibin);\
+            double unc_lambd = h_lambd->GetBinError(etabin, phibin);\
+            double rho = h_rho_sig->GetBinContent(etabin, phibin);\
+            unc_num = (unc_kappa*unc_kappa / (pt_2_step3*pt_2_step3) + unc_lambd*unc_lambd + 2*charge_2*rho*unc_kappa/pt_2_step3*unc_lambd);\
+            unc_den = pow(1./pt_2_step4, 4);\
+            unc = sqrt(unc_num / unc_den);\
+            return unc;"
+        )     
+        df = df.Define(
+            "pt_2_step4_scaleup",
+            "pt_2_step4 + scale_unc_2"
+        )
+        df = df.Define(
+            "pt_2_step4_scaledn",
+            "pt_2_step4 - scale_unc_2"
+        )  
+        df = df.Define(
+            "mass_Z_step4_scaleup",
+            "sqrt(2 * pt_1_step4_scaleup * pt_2_step4_scaleup * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+        )
+        df = df.Define(
+            "mass_Z_step4_scaledn",
+            "sqrt(2 * pt_1_step4_scaledn * pt_2_step4_scaledn * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+        )
 
-    df = df.Define(
-        f'{gen}pt_1_step5',
-        f'int eta_bin = h_corr->GetXaxis()->FindBin(abs(eta_1));\
-        return {gen}pt_1_step4 * (91.1876 + h_corr->GetBinContent(eta_bin)) / (91.1876 + h_tocorr->GetBinContent(eta_bin));'
-    )
-    df = df.Define(
-        f'{gen}pt_2_step5',
-        f'int eta_bin = h_corr->GetXaxis()->FindBin(abs(eta_2));\
-        return {gen}pt_2_step4 * (91.1876 + h_corr->GetBinContent(eta_bin)) / (91.1876 + h_tocorr->GetBinContent(eta_bin));'
-    )
-
-    df = df.Define(
-        f"{gen}mass_Z_step5",
-        f"sqrt(2 * {gen}pt_1_step5 * {gen}pt_2_step5 * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
-    )
+        # resolution uncertainties
+        df = df.Define(
+            "k_unc_1",
+            "double unc = 0;\
+            double unc_num, unc_den;\
+            double absetabin = h_k_sig->GetXaxis()->FindBin(abs(eta_1));\
+            double k_data = h_k->GetBinContent(absetabin, 3);\
+            double k_sig = h_k_sig->GetBinContent(absetabin, 3);\
+            double unc_k_data = h_k_unc_data->GetBinError(absetabin);\
+            double unc_k_sig = h_k_unc_sig->GetBinError(absetabin);\
+            double k = 0;\
+            if (k_sig < k_data){\
+                k = sqrt(k_data*k_data - k_sig*k_sig);\
+                unc_num = k_data*k_data * unc_k_data*unc_k_data + k_sig*k_sig * unc_k_sig*unc_k_sig;\
+                unc_den = k*k;\
+                unc = sqrt(unc_num/unc_den);\
+            }\
+            return unc;"
+        )
+        df = df.Define(
+            "pt_1_step4_resolup",
+            "double k = 0;\
+            double absetabin = h_k_sig->GetXaxis()->FindBin(abs(eta_1));\
+            double k_data = h_k->GetBinContent(absetabin, 3);\
+            double k_sig = h_k_sig->GetBinContent(absetabin, 3);\
+            if (k_sig < k_data) k = sqrt(k_data*k_data - k_sig*k_sig);\
+            return pt_1_step3 * (1 + (k+k_unc_1)/k * (pt_1_step4 / pt_1_step3 - 1))"
+        )
+        df = df.Define(
+            "pt_1_step4_resoldn",
+            "double k = 0;\
+            double absetabin = h_k_sig->GetXaxis()->FindBin(abs(eta_1));\
+            double k_data = h_k->GetBinContent(absetabin, 3);\
+            double k_sig = h_k_sig->GetBinContent(absetabin, 3);\
+            if (k_sig < k_data) k = sqrt(k_data*k_data - k_sig*k_sig);\
+            return pt_1_step3 * (1 + (k-k_unc_1)/k * (pt_1_step4 / pt_1_step3 - 1))"
+        )
+        df = df.Define(
+            "k_unc_2",
+            "double unc = 0;\
+            double unc_num, unc_den;\
+            double absetabin = h_k_sig->GetXaxis()->FindBin(abs(eta_2));\
+            double k_data = h_k->GetBinContent(absetabin, 3);\
+            double k_sig = h_k_sig->GetBinContent(absetabin, 3);\
+            double unc_k_data = h_k_unc_data->GetBinError(absetabin);\
+            double unc_k_sig = h_k_unc_sig->GetBinError(absetabin);\
+            double k = 0;\
+            if (k_sig < k_data){\
+                k = sqrt(k_data*k_data - k_sig*k_sig);\
+                unc_num = k_data*k_data * unc_k_data*unc_k_data + k_sig*k_sig * unc_k_sig*unc_k_sig;\
+                unc_den = k*k;\
+                unc = sqrt(unc_num/unc_den);\
+            }\
+            return unc;"
+        )   
+        df = df.Define(
+            "pt_2_step4_resolup",
+            "double k = 0;\
+            double absetabin = h_k_sig->GetXaxis()->FindBin(abs(eta_2));\
+            double k_data = h_k->GetBinContent(absetabin, 3);\
+            double k_sig = h_k_sig->GetBinContent(absetabin, 3);\
+            if (k_sig < k_data) k = sqrt(k_data*k_data - k_sig*k_sig);\
+            return pt_2_step3 * (1 + (k+k_unc_2)/k * (pt_2_step4 / pt_2_step3 - 1))"
+        )
+        df = df.Define(
+            "pt_2_step4_resoldn",
+            "double k = 0;\
+            double absetabin = h_k_sig->GetXaxis()->FindBin(abs(eta_2));\
+            double k_data = h_k->GetBinContent(absetabin, 3);\
+            double k_sig = h_k_sig->GetBinContent(absetabin, 3);\
+            if (k_sig < k_data) k = sqrt(k_data*k_data - k_sig*k_sig);\
+            return pt_2_step3 * (1 + (k-k_unc_2)/k * (pt_2_step4 / pt_2_step3 - 1))"
+        )     
+        df = df.Define(
+            "mass_Z_step4_resolup",
+            "sqrt(2 * pt_1_step4_resolup * pt_2_step4_resolup * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+        )
+        df = df.Define(
+            "mass_Z_step4_resoldn",
+            "sqrt(2 * pt_1_step4_resoldn * pt_2_step4_resoldn * (cosh(eta_1 - eta_2) - cos(phi_1 - phi_2)));"
+        )
+        # df.Snapshot('Events', 'test.root')
 
     return df

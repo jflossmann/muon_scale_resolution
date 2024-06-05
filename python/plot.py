@@ -235,7 +235,149 @@ def plot_ratio2(hists, title, outfile, text=['','',''], xrange=None, ratio_range
     return test_chi2_gen
 
 
+def plot_ratio_updn(
+        hists = [],
+        labels=["", ""], 
+        title="", 
+        outfile="dummy.pdf", 
+        text=['','',''], 
+        xrange=[60, 120],
+        ratiorange = [0.8, 1.2],
+        lumi = '(2022, 13.6 TeV)',
+        var = '',
+        markers = [20, 20, 22, 23]
+    ):
+    h0, h1 = hists[0], hists[1]
+    c = ROOT.TCanvas("c", title, 800, 700)
+    ROOT.gROOT.SetBatch(1)
+    pad1 = ROOT.TPad("pad1", "pad1", 0,0.3,1,1)
+    pad1.SetBottomMargin(0)
+    pad1.Draw()
+    pad1.cd()
+    h1.SetStats(0)
+    h1.GetXaxis().SetRangeUser(xrange[0], xrange[1])
+    h1.GetYaxis().SetRangeUser(0.0001, 1.2* max(h0.GetMaximum(), h1.GetMaximum()))
+    h0.GetXaxis().SetRangeUser(xrange[0], xrange[1])
+    h1.GetYaxis().SetLabelSize(0.04)
+    h1.GetYaxis().SetTitleSize(0.06)
+    h1.GetYaxis().SetTitleOffset(0.85)
+    h1.GetYaxis().SetTitle("a.u.")
+    h1.Draw("same hist e")
 
+    h1.SetLineWidth(2)
+    h1.SetTitle(title)
+    h0.Sumw2()
+
+    legend = ROOT.TLegend(0.12, 0.7, 0.3, 0.88)
+    legend.AddEntry(h1.GetName(), labels[1])
+    h_tmp = []
+    for i in range(len(hists)):
+        if i == 0:
+            h_tmp.append(hists[i].Clone(hists[i].GetName()+'upper'))
+
+            hists[i].SetMarkerStyle(markers[i])
+            h_tmp[-1].SetMarkerStyle(markers[i])
+
+            hists[i].SetMarkerSize(.8)
+            h_tmp[-1].SetMarkerSize(.8)
+
+            hists[i].SetMarkerColor(ROOT.kBlack)
+            h_tmp[-1].SetMarkerColor(ROOT.kBlack)
+
+            # hists[i].SetLineColor(ROOT.kGray)
+            # h_tmp[-1].SetLineColor(ROOT.kGray)
+
+            h_tmp[-1].Draw("same ep")
+            legend.AddEntry(h_tmp[-1].GetName(), labels[i])
+
+            ROOT.gPad.Modified()
+            ROOT.gPad.Update()   
+
+        if i > 1:
+            h_tmp.append(hists[i].Clone(hists[i].GetName()+'upper'))
+
+            # hists[i].SetMarkerStyle(markers[i])
+            # h_tmp[-1].SetMarkerStyle(markers[i])
+
+            # hists[i].SetMarkerSize(.8)
+            # h_tmp[-1].SetMarkerSize(.8)
+
+            hists[i].SetLineWidth(1)
+            h_tmp[-1].SetLineWidth(1)
+
+            # hists[i].SetMarkerColor(ROOT.kBlue - i)
+            # h_tmp[-1].SetMarkerColor(ROOT.kBlue - i)
+
+            hists[i].SetLineColor(ROOT.kBlue - 1)
+            h_tmp[-1].SetLineColor(ROOT.kBlue - 1)
+
+            h_tmp[-1].Draw("same hist")
+            legend.AddEntry(h_tmp[-1].GetName(), labels[i])
+
+            ROOT.gPad.Modified()
+            ROOT.gPad.Update()
+
+    legend.SetBorderSize(0)
+    legend.Draw('same')
+    ROOT.gPad.Modified()
+    ROOT.gPad.Update()
+
+    #test_ad = plots['dt'].AndersonDarlingTest(plots['mc'], "D")
+    test_chi2 = h0.Chi2Test(h1, "WW CHI2/NDF")
+    #test_ks = plots['dt'].KolmogorovTest(plots['mc'], "WW")
+    cmsTex=ROOT.TLatex()
+    cmsTex.SetTextFont(42)
+    cmsTex.SetTextSize(0.025)
+    cmsTex.SetNDC()
+    cmsTex.SetTextSize(0.035)
+    cmsTex.DrawLatex(0.15,0.915,'#bf{CMS} #it{Preliminary}')
+    #cmsTex.DrawLatex(0.745, 0.92, '{} data events'.format(evts))
+    cmsTex.DrawLatex(0.75, 0.915, lumi)
+    
+    #cmsTex.DrawLatex(0.7, 0.85, 'A-D = {}'.format(test_ad))
+    cmsTex.DrawLatex(0.68, 0.86, text[0])
+    cmsTex.DrawLatex(0.68, 0.82, text[1])
+    cmsTex.DrawLatex(0.68, 0.78, text[2])
+    cmsTex.DrawLatex(0.68, 0.65, 'chi2/NDF = {}'.format(round(test_chi2,3)))
+    #cmsTex.DrawLatex(0.7, 0.75, 'K-S = {}'.format(test_ks))
+    #pad1.SetLogy(1)
+    c.cd()
+    pad2 = ROOT.TPad("pad2", "pad2", 0,0,1,0.3)
+    pad2.SetTopMargin(.05)
+    pad2.SetBottomMargin(.3)
+    pad2.Draw()
+    pad2.cd()
+    h0.SetStats(0)
+    h0.Divide(h1)
+    #plots['dt'].SetMarkerStyle(20)
+    h0.Draw("ep")
+    if len(hists) > 2:
+        for i in range(len(hists)-2):
+            hists[i+2].Divide(h1)
+            hists[i+2].Draw("same hist")
+
+            ROOT.gPad.Modified()
+            ROOT.gPad.Update()
+    h0.GetYaxis().SetRangeUser(ratiorange[0], ratiorange[1])
+    h0.GetXaxis().SetLabelSize(0.1)
+    h0.GetYaxis().SetLabelSize(0.1)
+    h0.GetYaxis().SetTitle(f"ratio")
+    h0.GetYaxis().SetTitleOffset(0.4)
+    h0.GetXaxis().SetTitleOffset(.8)
+    h0.GetYaxis().SetTitleSize(0.1)
+    h0.GetXaxis().SetTitleSize(0.15)
+    h0.GetXaxis().SetTitle(var)
+    h0.SetTitle("")
+    h0.GetYaxis().SetNdivisions(505)
+    line = ROOT.TLine(xrange[0], 1, xrange[1], 1)
+    line.SetLineWidth(2)
+    line.Draw("same")
+
+    ROOT.gPad.Modified()
+    ROOT.gPad.Update()
+    c.SaveAs(outfile)    
+    c.SaveAs(outfile.split(".pdf")[0]+".png")
+    return test_chi2
 
 
 def plot_2d_ratio(hists, outfile, binsx, binsy):
